@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Gwinnett / DeKalb Church Outreach Database</title>
+<style>
+  :root {
+    --bg:#0f172a; --surface:#1e293b; --surface-2:#334155; --border:#475569;
+    --text:#f1f5f9; --text-dim:#94a3b8; --accent:#3b82f6;
+    --english:#3b82f6; --spanish:#f59e0b; --korean:#10b981;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px;}
+  header{padding:14px 24px;background:linear-gradient(90deg,#1e293b,#0f172a);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+  header h1{margin:0;font-size:18px;font-weight:600;}
+  header .subtitle{color:var(--text-dim);font-size:12px;margin-top:2px;}
+  .stats{display:flex;gap:10px;flex-wrap:wrap;}
+  .stat{background:var(--surface);padding:6px 12px;border-radius:8px;border:1px solid var(--border);}
+  .stat .num{font-size:16px;font-weight:700;}
+  .stat .lbl{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;}
+  .container{display:grid;grid-template-columns:1.05fr 1fr;gap:12px;padding:12px 16px;height:calc(100vh - 70px);}
+  @media(max-width:1100px){
+    .container{grid-template-columns:1fr;height:auto;padding:8px;}
+    #gmap{min-height:280px;height:280px;}
+    .panel{min-height:auto;}
+    .table-wrap{max-height:600px;}
+  }
+  /* Phone-specific tweaks */
+  @media(max-width:640px){
+    header{padding:10px 12px;}
+    header h1{font-size:16px;}
+    header .subtitle{display:none;}
+    .stats{gap:6px;}
+    .stat{padding:4px 8px;}
+    .stat .num{font-size:14px;}
+    .stat .lbl{font-size:9px;}
+    .container{padding:6px;gap:8px;}
+    .panel-header{padding:8px 10px;}
+    .panel-header h2{font-size:12px;}
+    /* Larger tap targets */
+    .btn{padding:9px 14px;font-size:13px;min-height:38px;}
+    .filter-btn{padding:7px 12px;font-size:12px;min-height:34px;}
+    .icon-btn{padding:6px 8px;font-size:16px;min-height:34px;}
+    /* Filter chips horizontally scrollable */
+    .filter-row{flex-direction:column;align-items:stretch;gap:6px;padding:8px 10px;}
+    .filter-group{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px;}
+    .filter-group::-webkit-scrollbar{height:4px;}
+    .filter-group .lbl{flex:none;}
+    .filter-btn{flex:none;}
+    /* Bigger search input + prevent iOS zoom */
+    .search-bar input,.form-row input,.form-row select,.form-row textarea{font-size:16px !important;}
+    /* Compact table: hide low-priority columns on phones */
+    th[data-sort="spaceSize"], td:nth-child(5),
+    th[data-sort="landAreaAc"], td:nth-child(6){display:none;}
+    /* Status pill becomes a colored dot to save space */
+    th[data-sort="status"]{width:14px;}
+    td:first-child .pill{font-size:0;padding:0;width:10px;height:10px;border-radius:50%;display:inline-block;}
+    /* Tighter cells */
+    td{padding:8px 6px;font-size:13px;}
+    th{padding:6px 5px;font-size:10px;}
+    /* Modals fill the screen on phones */
+    .modal-backdrop{padding:0;align-items:stretch;}
+    .modal{max-width:100%;max-height:100vh;height:100vh;border-radius:0;}
+    .field-grid{grid-template-columns:1fr 1fr;gap:8px;}
+    .field-grid.two,.field-grid.one{grid-template-columns:1fr;}
+    .modal-footer{position:sticky;bottom:0;background:var(--surface);}
+  }
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;min-height:0;}
+  .panel-header{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;}
+  .panel-header h2{margin:0;font-size:13px;font-weight:600;}
+  #gmap{flex:1 1 auto;min-height:400px;}
+  .filter-row{display:flex;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center;}
+  .filter-group{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+  .filter-group .lbl{color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-right:4px;}
+  .filter-btn{background:var(--surface-2);color:var(--text);border:1px solid var(--border);padding:4px 10px;border-radius:5px;cursor:pointer;font-size:12px;transition:all .15s;font-weight:500;}
+  .filter-btn:hover{background:var(--border);}
+  .filter-btn.active{background:var(--accent);color:white;border-color:var(--accent);}
+  .filter-btn .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:middle;}
+  .search-bar{padding:8px 14px;border-bottom:1px solid var(--border);}
+  .search-bar input{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);padding:7px 12px;border-radius:6px;font-size:13px;}
+  .search-bar input::placeholder{color:var(--text-dim);}
+  .table-wrap{flex:1;overflow:auto;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  thead{position:sticky;top:0;background:var(--surface-2);z-index:1;}
+  th{text-align:left;padding:8px 10px;font-size:10.5px;text-transform:uppercase;color:var(--text-dim);letter-spacing:.5px;font-weight:600;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap;}
+  th:hover{color:var(--text);}
+  th .sort-arrow{opacity:.4;margin-left:4px;font-size:10px;}
+  th.sorted .sort-arrow{opacity:1;}
+  td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top;}
+  tbody tr{cursor:pointer;transition:background .1s;}
+  tbody tr:hover{background:rgba(59,130,246,0.08);}
+  .pill{display:inline-block;padding:1px 7px;border-radius:9px;font-size:10.5px;font-weight:600;white-space:nowrap;}
+  .pill.english{background:rgba(59,130,246,.2);color:#93c5fd;}
+  .pill.spanish{background:rgba(245,158,11,.2);color:#fcd34d;}
+  .pill.korean{background:rgba(16,185,129,.2);color:#6ee7b7;}
+  .pill.owned{background:rgba(16,185,129,.18);color:#6ee7b7;}
+  .pill.leased{background:rgba(245,158,11,.18);color:#fcd34d;}
+  .pill.status-pending{background:rgba(100,116,139,.25);color:#cbd5e1;}
+  .pill.status-visited{background:rgba(34,197,94,.2);color:#86efac;}
+  .pill.status-followup{background:rgba(234,179,8,.2);color:#fde047;}
+  .pill.status-not-interested{background:rgba(239,68,68,.2);color:#fca5a5;}
+  .pill.status-converted{background:rgba(168,85,247,.2);color:#d8b4fe;}
+  .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center;padding:20px;}
+  .modal-backdrop.show{display:flex;}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;max-width:720px;width:100%;max-height:92vh;overflow:auto;}
+  .modal-header{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
+  .modal-header h3{margin:0;font-size:16px;}
+  .modal-header .close{background:none;border:none;color:var(--text-dim);font-size:24px;cursor:pointer;line-height:1;}
+  .modal-body{padding:14px 20px;}
+  .field-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;}
+  .field-grid.two{grid-template-columns:1fr 1fr;}
+  .field-grid.one{grid-template-columns:1fr;}
+  .field{display:flex;flex-direction:column;min-width:0;}
+  .field label{font-size:10.5px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;font-weight:600;}
+  .field .val{font-size:13px;word-break:break-word;}
+  .field a{color:#93c5fd;text-decoration:none;}
+  .field a:hover{text-decoration:underline;}
+  .form-row{margin-bottom:12px;}
+  .form-row label{display:block;font-size:10.5px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;font-weight:600;}
+  .form-row input,.form-row select,.form-row textarea{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);padding:7px 10px;border-radius:6px;font-size:13px;font-family:inherit;}
+  .form-row textarea{min-height:70px;resize:vertical;}
+  .modal-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;}
+  .btn{padding:7px 14px;border-radius:6px;font-size:12.5px;font-weight:500;cursor:pointer;border:1px solid transparent;}
+  .btn-primary{background:var(--accent);color:white;}
+  .btn-primary:hover{background:#2563eb;}
+  .btn-secondary{background:var(--surface-2);color:var(--text);border-color:var(--border);}
+  .btn-secondary:hover{background:var(--border);}
+  .btn-danger{background:rgba(239,68,68,.15);color:#fca5a5;border-color:rgba(239,68,68,.3);}
+  .btn-danger:hover{background:rgba(239,68,68,.25);}
+  .section-title{font-weight:600;margin:14px 0 8px;color:#93c5fd;font-size:12px;text-transform:uppercase;letter-spacing:.7px;}
+  .icon-btn{background:none;border:none;color:var(--text-dim);cursor:pointer;padding:0 2px;font-size:13px;line-height:1;}
+  .icon-btn:hover{color:#93c5fd;}
+  .toolbar{padding:8px 14px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;font-size:11.5px;color:var(--text-dim);}
+  .toolbar button{font-size:11.5px;padding:4px 9px;}
+  .empty-state{padding:40px 20px;text-align:center;color:var(--text-dim);}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  th.num{text-align:right;}
+  details{margin-bottom:10px;}
+  details summary{cursor:pointer;font-weight:600;color:var(--text-dim);font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;padding:6px 0;list-style:none;}
+  details summary::before{content:'▸ ';}
+  details[open] summary::before{content:'▾ ';}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Gwinnett / DeKalb Church Outreach Database</h1>
+    <div class="subtitle">Real estate prospecting tracker &mdash; property data, congregation contacts, visit notes</div>
+  </div>
+  <div class="stats" id="stats"></div>
+</header>
+
+<div class="container">
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Map <span id="mapHeaderName" style="color:var(--text-dim);font-weight:400;font-size:12px;"></span></h2>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-secondary" id="openFullMapBtn" title="Open this location in Google Maps">Open in Maps</button>
+        <button class="btn btn-secondary" id="directionsBtn" title="Get driving directions">Directions</button>
+      </div>
+    </div>
+    <iframe id="gmap"
+      src="https://www.google.com/maps?q=Gwinnett+County+GA&output=embed"
+      style="flex:1;border:0;width:100%;min-height:400px;"
+      loading="lazy"
+      referrerpolicy="no-referrer-when-downgrade"></iframe>
+    <div class="toolbar">
+      <span id="geocodeStatus">Click any row in the directory to focus the map on that church.</span>
+      <span style="font-size:11px;">Tip: type a city name in search to refocus the map area.</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Directory</h2>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="addChurchBtn">+ Add</button>
+        <button class="btn btn-secondary" id="importBtn">Import CSV</button>
+        <button class="btn btn-secondary" id="exportBtn">Export CSV</button>
+        <input type="file" id="importFile" accept=".csv" style="display:none;" />
+      </div>
+    </div>
+
+    <div class="filter-row">
+      <div class="filter-group"><span class="lbl">City</span><div id="cityFilters"></div></div>
+      <div class="filter-group"><span class="lbl">Lang</span><div id="langFilters"></div></div>
+      <div class="filter-group">
+        <span class="lbl">Tenure</span>
+        <button class="filter-btn active" data-tenure="all">All</button>
+        <button class="filter-btn" data-tenure="O">Owned</button>
+        <button class="filter-btn" data-tenure="L">Leased</button>
+      </div>
+    </div>
+
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="Search name, address, contact, notes, zip..." />
+    </div>
+
+    <div class="table-wrap">
+      <table id="churchTable">
+        <thead><tr>
+          <th data-sort="status">Status</th>
+          <th data-sort="city">City</th>
+          <th data-sort="name">Name</th>
+          <th data-sort="address">Address</th>
+          <th class="num" data-sort="spaceSize">Sqft</th>
+          <th class="num" data-sort="landAreaAc">Acres</th>
+          <th data-sort="ownLease">Tenure</th>
+          <th data-sort="churchPhone">Phone</th>
+        </tr></thead>
+        <tbody id="churchTbody"></tbody>
+      </table>
+      <div id="emptyState" class="empty-state" style="display:none;">No churches match your filters.</div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <div><h3 id="modalTitle"></h3><div id="modalCategory" style="margin-top:4px;"></div></div>
+      <button class="close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="section-title">Property</div>
+      <div class="field-grid">
+        <div class="field"><label>Address</label><div class="val" id="dAddress"></div></div>
+        <div class="field"><label>City / Zip</label><div class="val" id="dCity"></div></div>
+        <div class="field"><label>County</label><div class="val" id="dCounty"></div></div>
+        <div class="field"><label>Own / Lease</label><div class="val" id="dOwnLease"></div></div>
+        <div class="field"><label>Land area</label><div class="val" id="dLand"></div></div>
+        <div class="field"><label>Building size</label><div class="val" id="dSqft"></div></div>
+        <div class="field"><label>Last sold</label><div class="val" id="dLastSold"></div></div>
+        <div class="field"><label>Sold price</label><div class="val" id="dSoldPrice"></div></div>
+        <div class="field"><label>Service time</label><div class="val" id="dService"></div></div>
+      </div>
+      <div class="section-title">Contacts</div>
+      <div class="field-grid two">
+        <div class="field"><label>Church contact</label><div class="val" id="dChurchContact"></div></div>
+        <div class="field"><label>Property contact</label><div class="val" id="dPropContact"></div></div>
+        <div class="field"><label>Church phone</label><div class="val" id="dChurchPhone"></div></div>
+        <div class="field"><label>Property phone</label><div class="val" id="dPropPhone"></div></div>
+        <div class="field"><label>Church email</label><div class="val" id="dChurchEmail"></div></div>
+        <div class="field"><label>Property email</label><div class="val" id="dPropEmail"></div></div>
+      </div>
+      <div class="field-grid one">
+        <div class="field"><label>Website</label><div class="val" id="dWebsite"></div></div>
+        <div class="field"><label>Research notes</label><div class="val" id="dResearchNotes" style="white-space:pre-wrap;"></div></div>
+      </div>
+      <div class="section-title">Visit tracking</div>
+      <div class="form-row">
+        <label>Outreach status</label>
+        <select id="fStatus">
+          <option value="pending">Not contacted</option>
+          <option value="visited">Visited / dropped by</option>
+          <option value="followup">Follow-up needed</option>
+          <option value="not-interested">Not interested</option>
+          <option value="converted">Converted to lead</option>
+        </select>
+      </div>
+      <div class="field-grid two">
+        <div class="form-row"><label>Date last visited</label><input type="date" id="fVisitDate" /></div>
+        <div class="form-row"><label>Next follow-up</label><input type="date" id="fFollowupDate" /></div>
+        <div class="form-row"><label>Contact made (name)</label><input type="text" id="fContactName" /></div>
+        <div class="form-row"><label>Best time to visit</label><input type="text" id="fBestTime" /></div>
+      </div>
+      <div class="form-row"><label>Visit notes</label><textarea id="fNotes"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="openMapsBtn">Maps</button>
+      <button class="btn btn-secondary" id="callBtn">Call</button>
+      <button class="btn btn-secondary" id="emailBtn">Email</button>
+      <button class="btn btn-danger" id="deleteBtn" style="display:none;">Delete</button>
+      <button class="btn btn-secondary" id="editBtn">Edit info</button>
+      <button class="btn btn-primary" onclick="saveTracking()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="addModalBackdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <div><h3 id="addModalTitle">Add a church</h3><div style="color:var(--text-dim);font-size:12px;margin-top:4px;">Saved to your browser. Use Export CSV to back up.</div></div>
+      <button class="close" onclick="closeAddModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label>Church name *</label><input type="text" id="aName" /></div>
+      <div class="field-grid">
+        <div class="form-row"><label>Category</label>
+          <select id="aCategory">
+            <option value="english">English</option><option value="spanish">Iglesia (Spanish)</option><option value="korean">Korean</option>
+          </select>
+        </div>
+        <div class="form-row"><label>Own / Lease</label>
+          <select id="aOwnLease"><option value="">&mdash;</option><option value="O">Owned</option><option value="L">Leased</option></select>
+        </div>
+        <div class="form-row"><label>Service time</label><input type="text" id="aService" /></div>
+      </div>
+      <div class="form-row"><label>Address *</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="aAddress" style="flex:1;" />
+          <button type="button" class="btn btn-secondary" id="geocodeBtn">📍 Geocode</button>
+        </div>
+        <div id="geocodeBtnStatus" style="font-size:11px;color:var(--text-dim);margin-top:4px;"></div>
+      </div>
+      <div class="field-grid">
+        <div class="form-row"><label>City</label><input type="text" id="aCity" /></div>
+        <div class="form-row"><label>County</label><input type="text" id="aCounty" /></div>
+        <div class="form-row"><label>Zip</label><input type="text" id="aZip" /></div>
+      </div>
+      <div class="field-grid">
+        <div class="form-row"><label>Land area (acres)</label><input type="number" step="any" id="aLand" /></div>
+        <div class="form-row"><label>Building size (sqft)</label><input type="number" step="any" id="aSqft" /></div>
+        <div class="form-row"><label>Last sold price</label><input type="number" step="any" id="aSoldPrice" /></div>
+      </div>
+      <div class="field-grid">
+        <div class="form-row"><label>Last sold date</label><input type="date" id="aSoldDate" /></div>
+        <div class="form-row"><label>Latitude</label><input type="number" step="any" id="aLat" /></div>
+        <div class="form-row"><label>Longitude</label><input type="number" step="any" id="aLng" /></div>
+      </div>
+      <details>
+        <summary>Contacts</summary>
+        <div class="field-grid">
+          <div class="form-row"><label>Church contact</label><input type="text" id="aChurchContact" /></div>
+          <div class="form-row"><label>Church phone</label><input type="text" id="aChurchPhone" /></div>
+          <div class="form-row"><label>Church email</label><input type="email" id="aChurchEmail" /></div>
+          <div class="form-row"><label>Property contact</label><input type="text" id="aPropContact" /></div>
+          <div class="form-row"><label>Property phone</label><input type="text" id="aPropPhone" /></div>
+          <div class="form-row"><label>Property email</label><input type="email" id="aPropEmail" /></div>
+        </div>
+      </details>
+      <div class="form-row"><label>Website</label><input type="url" id="aWebsite" /></div>
+      <div class="form-row"><label>Notes</label><textarea id="aNotes"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeAddModal()">Cancel</button>
+      <button class="btn btn-primary" id="saveAddBtn">Save church</button>
+    </div>
+  </div>
+</div>
+
+<script id="seed-data" type="application/json">[{"name":"Northlands Church","website":"http://northlands.church/","serviceTime":"SUNDAYS AT 10:00 AM","address":"6630 Bay Circle","city":"Peachtree Corners","county":"Gwinnett","zip":"30071","ownLease":"O","landAreaAc":4.24,"spaceSize":37881.0,"churchPhone":"(770) 797-9498","lastSoldTime":"2003-11-03","soldPrice":2350000.0,"id":10001,"category":"english"},{"name":"Mary Our Queen Catholic Church","website":"http://www.maryourqueen.com/","serviceTime":"Saturday 5:00 pm | Sunday 8:30 am| Sunday 11:00 am (livestreamed)|Sunday 5:00 pm","address":"6260 The Corners Parkway Northwest","city":"Peachtree Corners","county":"Gwinnett","zip":"30092","ownLease":"O","landAreaAc":15.53,"spaceSize":34244.0,"churchPhone":"(770) 416-0002","propertyContact":"The Roman Catholic Archdiocese of Atlanta","propertyPhone":"404-920-7800","notes":"Well established congregation with a MASSIVE 3 tier parking lot. This was as to be expected with what seemed to be a strong following. Many familes wtih children and etc.","id":10002,"category":"english"},{"name":"Landmark Church","website":"http://www.landmarkchurch.org/","address":"3737 Holcomb Bridge Road","city":"Peachtree Corners","county":"Gwinnett","zip":"30092","ownLease":"O","landAreaAc":10.22,"spaceSize":10350.0,"churchPhone":"(770) 449-5956","churchEmail":"office@landmarkchurch.org","id":10003,"category":"english"},{"name":"Unity Atlanta Church","website":"http://unityatl.org/","serviceTime":"Sundays: 11:00am","address":"3597 Parkway Lane","city":"Peachtree Corners","county":"Gwinnett","zip":"30092","ownLease":"O","landAreaAc":2.61,"spaceSize":29297.0,"churchPhone":"(770) 441-0585","churchEmail":"pam@unityatl.org","notes":"Church was already out by the time I arrived. I observed a few members in the parking lot. Seemed to be a smaller, less established vibe. Building is located back up in the technology park. Minimum of 1 mile or so from the next main road.","id":10004,"category":"english"},{"name":"Peachtree Corners Baptist Church","website":"http://www.pcbchurch.org/","serviceTime":"Sunday Worship Service:9:30 | Sunday Life Groups 10:45|Office Hours M-Th 9a-3p","address":"4480 Peachtree Corners Circle","city":"Peachtree Corners","county":"Gwinnett","zip":"30092","ownLease":"O","landAreaAc":10.0,"spaceSize":90902.0,"churchPhone":"(770) 448-1313","churchEmail":"info@pcbchurch.org","notes":"This land/setup is IDEAL for DLC. I am pretty sure our leaders know one another as we recently had our church's anniversary picnic at their outdoor recreation field. This church has 2 parking lots. One where the church sits and another at the recreation fileds direct adjacent to the church. They have a baseball field, volleyball set up, a playground and a covered patio equiped with a full service kitchen and plenty of space for hosting events. THIS IS THE GOAL of DLC","id":10005,"category":"english"},{"name":"New Life Church (Gereja New Life)","website":"http://www.gerejanewlife.org/","serviceTime":"Sunday 8:00AM | 11:00AM","address":"3120 Medlock Bridge Road, Building F","city":"Peachtree Corners","county":"Gwinnett","zip":"30071","ownLease":"O","landAreaAc":0.35,"spaceSize":28004.0,"notes":"Discover Church rented from one of the churches in this general vicinity prior to relocating to our current lease space. Church lot was not terrribly full, perhaps 20 or so vehicles. DLC would have to use extra spaces for parking from other businesses. Located around the corner from PIB.","onSiteNote":"The church is not open we left the trifold","id":10006,"category":"english"},{"name":"Mt Carmel United Methodist Church","website":"http://www.mtcarmel-umc.org/","serviceTime":"SUNDAY AT 10:00 AM","address":"5100 South Old Peachtree Road","city":"Peachtree Corners","county":"Gwinnett","zip":"30092","ownLease":"O","landAreaAc":9.17,"spaceSize":26416.0,"churchPhone":"(770) 449-4498","notes":"Very small parking lot with a well used graveyard located on the church's land. Church has a small \"everybody knows your name feel.\" It also neighbors a very large community grave yard.","onSiteNote":"We met John, the musician, 71 yos. Very Nice guy. The church has 200 years. The pastor is a young lady named Lorie. She met us as well very nice.","id":10007,"category":"english"},{"name":"The Church of Jesus Christ of Latter-day Saints","website":"https://local.churchofjesuschrist.org/en/us/ga/peachtree-corners/5995-spalding-drive?utm_source=gmb&utm_medium=yext&y_source=1_MjM3MzgwODYtNzE1LWxvY2F0aW9uLndlYnNpdGU%3D","address":"5995 Spalding Drive","city":"Peachtree Corners","county":"Gwinnett","zip":"30092","ownLease":"O","landAreaAc":7.14,"spaceSize":16592.0,"churchPhone":"(678) 235-8533","churchEmail":"Institution owner see the website","id":10008,"category":"english"},{"name":"Christ the King Lutheran Church (ELCA)","website":"https://www.ctklutheran.org/","serviceTime":"Sunday 9:00AM - 10:00AM | 11:15AM - 12:15PM","address":"5575 Peachtree Parkway","city":"Peachtree Corners","county":"Gwinnett","zip":"30092","ownLease":"O","landAreaAc":8.55,"spaceSize":62540.0,"churchPhone":"(770) 449-1211","lastSoldTime":"1999-03-03","soldPrice":3760000.0,"notes":"Arrived as they had almost cleared the parking lot. Well established church, buidling sits directly on Peachtree Pkwy. Immaculate location.","onSiteNote":"we met Pastor Jay and left trifold","id":10009,"category":"english"},{"name":"Atlanta Telugu Church","website":"http://www.atlantateluguchurch.org/","serviceTime":"Sunday Service  @ 4:00 PM","address":"5575 Peachtree Parkway","city":"Peachtree Corners","county":"Gwinnett","zip":"30092","ownLease":"L","landAreaAc":8.55,"spaceSize":62540.0,"churchPhone":"(770) 573-7835","notes":"\"Same bldg as above\"","id":10010,"category":"english"},{"name":"Citygate Atlanta Kingdom Center & Kairos Transformation Ministries","website":"https://www.jacquietyre.com/","address":"3100 Medlock Bridge Road","city":"Peachtree Corners","county":"Gwinnett","zip":"30071","ownLease":"L","spaceSize":6900.0,"churchContact":"Jacquie Tyre","churchPhone":"(770) 674-1430","lastSoldTime":"L start 8/1/2022","id":10011,"category":"english"},{"name":"Walk Thru the Bible Ministries, Inc.","website":"https://www.walkthru.org/","address":"5550 Triangle Parkway Northwest","city":"Peachtree Corners","county":"Gwinnett","zip":"30092","ownLease":"L","spaceSize":9386.0,"churchContact":"Genny Baxley","churchPhone":"(770) 458-9300","lastSoldTime":"L start 1/12/2024","id":10012,"category":"english"},{"name":"Bread of Life Christian Church in Atlanta","website":"http://www.atlantabolcc.org/","serviceTime":"SUNDAY SERVICE @ 10am","address":"4995 Avalon Ridge Parkway","city":"Peachtree Corners","county":"Gwinnett","zip":"30071","ownLease":"O","landAreaAc":3.59,"spaceSize":30676.0,"churchContact":"Yungchou Xu","churchPhone":"(678) 979-8143","churchEmail":"yungchouhsu@gmail.com","lastSoldTime":"2018-09-14","soldPrice":2281000.0,"notes":"Ample weekend parking here. Nothing too eventful. Bldg appears to be in standard condition to what I've seen in the area.","onSiteNote":"Chinese church, spinklered, 993 load, 29,677SF interior","id":10013,"category":"english"},{"name":"Iglesia Pentecostal Unida Latinoamericana","website":"http://ipulatlanta.org/","serviceTime":"Sunday 11am | Tuesday 7:30pm | Friday 8pm","address":"7108 Peachtree Industrial Boulevard","city":"Peachtree Corners","county":"Gwinnett","zip":"30071","ownLease":"O","landAreaAc":1.0,"spaceSize":22000.0,"churchContact":"Alvaro Rojas","churchPhone":"(770) 906-4491","churchEmail":"PastorAlvaroRojas@gmail.com","lastSoldTime":"2021-05-06","soldPrice":910000.0,"notes":"Area is not in the best shape and is very congested with multiple business feeling like the are on top of one another. Tight and small parking space.","id":10014,"category":"spanish"},{"name":"The Father's House","website":"https://thefathershouseatl.org/","address":"6060 Spalding Drive","city":"Peachtree Corners","county":"Gwinnett","zip":"30092","ownLease":"O","landAreaAc":5.47,"spaceSize":11444.0,"churchContact":"Garland Hunt","churchPhone":"(770) 616-3584","churchEmail":"garlandhunt1@gmail.com","lastSoldTime":"2021-10-15","soldPrice":1000000.0,"id":10015,"category":"english"},{"name":"Shiloh Baptist Church","website":"https://www.facebook.com/groups/419535198127023/","address":"5988 Spalding Dr","city":"Peachtree Corners","county":"Gwinnett","zip":"30092","ownLease":"O","landAreaAc":5.7,"spaceSize":5678.0,"churchPhone":"PO Box can't find anything","id":10016,"category":"english"},{"name":"Southern Union Conference of Seventh-day Adventists","website":"https://www.southernunion.com/","address":"302 Research Dr NW","city":"Peachtree Corners","county":"Gwinnett","zip":"30092","ownLease":"O","landAreaAc":4.47,"spaceSize":68490.0,"churchPhone":"770-408-1800","churchEmail":"Church HQ office","lastSoldTime":"2012-11-11","soldPrice":2500000.0,"notes":"Older bldg. Appears bldg has been vacant for quite some time. At least from the exterior, bldg appears to have had no renovations, perhaps since it was built. Overgrown vegatation surrounding. Location is tucked back up in the office park. Several streets and at least a mile from PIB.","id":10017,"category":"english"},{"name":"Victory Church - Norcross","website":"http://victoryatl.com/","address":"5905 Brook Hollow Parkway","city":"Norcross","county":"Gwinnett","zip":"30071","id":10018,"category":"english"},{"name":"St. Patrick's Catholic Church","website":"http://www.stpatricksga.org/","address":"2140 Beaver Ruin Road","city":"Norcross","county":"Gwinnett","zip":"30071","id":10019,"category":"english"},{"name":"Dominion City Church","website":"http://www.dcgeorgia.org/","address":"300 Pinnacle Way","city":"Norcross","county":"Gwinnett","zip":"30071","id":10020,"category":"english"},{"name":"Discover Life Church","website":"https://www.discoverlifega.org/","address":"4845 South Old Peachtree Road","city":"Norcross","county":"Gwinnett","zip":"30071","ownLease":"L","id":10021,"category":"english"},{"name":"Winners Chapel International Atlanta","website":"https://www.winnerschapelga.org/","address":"4539 South Berkeley Lake Road Northwest","city":"Norcross","county":"Gwinnett","zip":"30071","id":10022,"category":"english"},{"name":"FCG Church","website":"http://fcg-familias.com/","address":"6991 Peachtree Industrial Boulevard","city":"Norcross","county":"Gwinnett","zip":"30092","id":10023,"category":"english"},{"name":"Campus Church","website":"http://www.campuschurch.org/","address":"1525 Indian Trail Lilburn Road Northwest","city":"Norcross","county":"Gwinnett","zip":"30093","id":10024,"category":"english"},{"name":"Holy Vietnamese Martyrs Catholic Church","website":"https://www.hvmatl.org/","address":"4545 Timmers Way","city":"Norcross","county":"Gwinnett","zip":"30093","id":10025,"category":"english"},{"name":"One Heart Church","website":"http://www.oneheartchurch.org/","address":"706 North Peachtree Street","city":"Norcross","county":"Gwinnett","zip":"30071","id":10026,"category":"english"},{"name":"Norcross First Global Methodist Church","website":"http://www.norcrossfirst.org/","address":"2500 Beaver Ruin Road","city":"Norcross","county":"Gwinnett","zip":"30071","ownLease":"O","landAreaAc":11.41,"spaceSize":45094.0,"churchPhone":"770-448-4142","churchEmail":"email@norcrossfirst.org","id":10027,"category":"english"},{"name":"Iglesia Universal","website":"http://universalusa.org/","address":"6081 Singleton Road","city":"Norcross","county":"Gwinnett","zip":"30093","id":10028,"category":"spanish"},{"name":"Hopewell Missionary Baptist Church, Norcross","website":"http://www.hmbchurch.net/","address":"182 Hunter Street Northwest","city":"Norcross","county":"Gwinnett","zip":"30071","ownLease":"O","landAreaAc":16.28,"spaceSize":68960.0,"churchContact":"William L. Sheals","churchPhone":"770-448-5475","churchEmail":"info@hmbchurch.net","propertyContact":"Brookhaven Innovation Academy Inc.","propertyPhone":"(770) 582-9132","propertyEmail":"acaskey@biaschool.org","lastSoldTime":"2019-06-28","soldPrice":6500000.0,"id":10029,"category":"english"},{"name":"Still Waters Church","website":"https://stillwaters.church/","address":"1590 Oakbrook Drive","city":"Norcross","county":"Gwinnett","zip":"30093","id":10030,"category":"english"},{"name":"Generations Church Norcross","website":"https://www.generationsnorcross.com/","address":"706 North Peachtree Street","city":"Norcross","county":"Gwinnett","zip":"30071","id":10031,"category":"english"},{"name":"Iglesia Monte Sinai - Atlanta","website":"http://www.montesinaiatl.org/","address":"1 Monte Sinai Drive","city":"Norcross","county":"Gwinnett","zip":"30093","id":10032,"category":"spanish"},{"name":"Supernatural Culture Church","address":"4487 Park Drive","city":"Norcross","county":"Gwinnett","zip":"30093","id":10033,"category":"english"},{"name":"Strong Hold Baptist Church","website":"http://www.strongholdbaptist.church/","address":"5865 Jimmy Carter Boulevard","city":"Norcross","county":"Gwinnett","zip":"30071","id":10034,"category":"english"},{"name":"Christos Community Church","address":"5172 Brook Hollow Parkway","city":"Norcross","county":"Gwinnett","zip":"30071","id":10035,"category":"english"},{"name":"Atlanta Tamil Church","website":"https://www.atlantatamilchurch.org/","address":"4798 Buford Highway","city":"Norcross","county":"Gwinnett","zip":"30071","id":10036,"category":"english"},{"name":"The Lord's House Community Church","website":"https://www.tlhcc.org/","address":"3060 Holcomb Bridge Road","city":"Norcross","county":"Gwinnett","zip":"30071","id":10037,"category":"english"},{"name":"Salvation & Deliverance Church","website":"https://www.facebook.com/SalvationandDeliverance/","address":"3250 Peachtree Corners Circle","city":"Norcross","county":"Gwinnett","zip":"30092","id":10038,"category":"english"},{"name":"Rock Bridge Baptist Church","website":"http://www.rockbridgebaptist.org/","address":"1012 Rockbridge Road Northwest","city":"Norcross","county":"Gwinnett","zip":"30093","id":10039,"category":"english"},{"name":"Christ Church Episcopal","website":"http://www.ccnorcross.org/","address":"400 Holcomb Bridge Road","city":"Norcross","county":"Gwinnett","zip":"30071","ownLease":"O","landAreaAc":10.1,"spaceSize":19617.0,"churchContact":"Pedro H Velasquez","churchPhone":"(770) 447-1166","propertyContact":"Christ Church Norcross Inc","lastSoldTime":"2022-04-11","soldPrice":610000.0,"id":10040,"category":"english"},{"name":"Peachtree Corners Presbyterian Church","website":"https://www.pcarpchurch.org/","address":"5918 Spalding Drive","city":"Norcross","county":"Gwinnett","zip":"30092","id":10041,"category":"english"},{"name":"Grace Atlanta Bible Church","website":"https://graceatlanta.org/","address":"10 College Street Northwest","city":"Norcross","county":"Gwinnett","zip":"30071","id":10042,"category":"english"},{"name":"Neighborhood Cooperative Ministries","website":"https://www.ourncm.org/","address":"500 Pinnacle Court","city":"Norcross","county":"Gwinnett","zip":"30071","id":10043,"category":"english"},{"name":"World Changers Ministries","website":"https://worldchangers.org/","address":"6920 Jimmy Carter Boulevard","city":"Norcross","county":"Gwinnett","zip":"30071","ownLease":"O","landAreaAc":7.07,"spaceSize":93616.0,"churchPhone":"(770) 263-7562","propertyContact":"World Changers Church International","lastSoldTime":"2009-09-22","soldPrice":3200000.0,"id":10044,"category":"english"},{"name":"Solution House Ministries","website":"https://solutionhouseministries.org/","address":"4845 South Old Peachtree Road","city":"Norcross","county":"Gwinnett","zip":"30071","id":10045,"category":"english"},{"name":"Forward in Faith Atlanta Church","address":"6050 Dawson Boulevard","city":"Norcross","county":"Gwinnett","zip":"30093","id":10046,"category":"english"},{"name":"True Christ Outreach Ministries","website":"http://truechrist.org/","address":"182 Hunter Street Northwest","city":"Norcross","county":"Gwinnett","zip":"30071","id":10047,"category":"english"},{"name":"Wellington Boone Ministries","website":"https://www.wellingtonboone.com/","address":"6060 Spalding Drive","city":"Norcross","county":"Gwinnett","zip":"30092","id":10048,"category":"english"},{"name":"Grace - The New Beginning Ministry","website":"https://www.facebook.com/GraceTheNewBeginningMinistry","address":"5335 Oakbrook Parkway","city":"Norcross","county":"Gwinnett","zip":"30093","id":10049,"category":"english"},{"name":"Christ Evangelical & Prayer Ministry","website":"https://www.cepmchurch.com/","address":"6103 Oakbrook Parkway","city":"Norcross","county":"Gwinnett","zip":"30093","id":10050,"category":"english"},{"name":"아틀란타 실로암한인교회 (Siloam Korean Church of Atlanta)","website":"http://www.atlantasiloamchurch.org/","address":"1870 Willow Trail Parkway","city":"Norcross","county":"Gwinnett","zip":"30093","id":10051,"category":"korean"},{"name":"THE KINGDOM OF GOD MINISTRIES. KGM. Global Church","website":"http://thekingdomofgodministries.org/","address":"10 College Street Northwest","city":"Norcross","county":"Gwinnett","zip":"30071","id":10052,"category":"english"},{"name":"Zion Church Fire Ministries","address":"4229 Steve Reynolds Boulevard","city":"Norcross","county":"Gwinnett","zip":"30093","id":10053,"category":"english"},{"name":"Iglesia el Tabernaculo de Atlanta","website":"https://www.tabernaculodeatlanta.com/","address":"6394 Buford Highway","city":"Norcross","county":"Gwinnett","zip":"30071","id":10054,"category":"spanish"},{"name":"Iglesia de Dios Nueva vida","address":"a102 Adams Street","city":"Norcross","county":"Gwinnett","zip":"30093","id":10055,"category":"spanish"},{"name":"Iglesia de Dios Ministerial de Jesucristo Internacional - IDMJI - CGMJI -- GA NORCROSS","website":"https://idmji.org/","address":"6050 Oakbrook Parkway","city":"Norcross","county":"Gwinnett","zip":"30093","id":10056,"category":"spanish"},{"name":"Atlanta Metropolitan Hispanic Seventh-day Adventist Church","website":"http://atlantametropolitanhispanicga.adventistchurch.org/","address":"5990 Oakbrook Parkway","city":"Norcross","county":"Gwinnett","zip":"30093","id":10057,"category":"spanish"},{"name":"Iglesia Cristiana La Familia","website":"http://www.iglesiacristianalafamilia.org/","address":"100 Pinnacle Way","city":"Norcross","county":"Gwinnett","zip":"30071","id":10058,"category":"spanish"},{"name":"Iglesia Evangélica Del Príncipe De Paz","address":"4852 Jimmy Carter Boulevard","city":"Norcross","county":"Gwinnett","zip":"30093","id":10059,"category":"spanish"},{"name":"IGLESIA CRISTIANA PENTECOSTES MOVIMIENTO MISIONERO MUNDIAL","website":"http://mmmnorcrossga.org/","address":"5320 Jimmy Carter Boulevard","city":"Norcross","county":"Gwinnett","zip":"30093","id":10060,"category":"spanish"},{"name":"Iglesia La Luz Del Mundo","website":"http://www.lldm.org/","address":"444 West Peachtree Street","city":"Norcross","county":"Gwinnett","zip":"30071","ownLease":"O","landAreaAc":1.1,"spaceSize":2060.0,"churchPhone":"(240) 285-3287","id":10061,"category":"spanish"},{"name":"Gerizim Hope Presbyterian Church","website":"http://ghpchurch.com/","address":"631 Mitchell Road Northwest","city":"Norcross","county":"Gwinnett","zip":"30071","id":10062,"category":"english"},{"name":"Iglesia Pentecostal Roca Solida","website":"http://www.rocasolidaupci.com/","address":"6855 Jimmy Carter Blvd,Building 2500 - Suite 2550","city":"Norcross","county":"Gwinnett","zip":"30071","ownLease":"L","churchPhone":"(470) 545-4191","id":10063,"category":"spanish"},{"name":"First Fellowship Baptist Church","website":"http://www.firstfellowshipbc.org/","address":"3119 Campus Drive","city":"Norcross","county":"Gwinnett","zip":"30071","id":10064,"category":"english"},{"name":"Shree Swaminarayan Hindu Temple ISSO","website":"http://www.issousa.org/","address":"6090 Jimmy Carter Boulevard","city":"Norcross","county":"Gwinnett","zip":"30071","id":10065,"category":"english"},{"name":"SMVS Hindu Temple","website":"http://www.smvs.org/","address":"5975 Oakbrook Parkway","city":"Norcross","county":"Gwinnett","zip":"30093","id":10066,"category":"english"},{"name":"Quan The Am Buddhist Temple","address":"4180 Arc Way","city":"Norcross","county":"Gwinnett","zip":"30093","id":10067,"category":"english"},{"name":"Bo De Buddhist Temple","address":"1341 Pirkle Road","city":"Norcross","county":"Gwinnett","zip":"30093","id":10068,"category":"english"},{"name":"Bait-ul-Ata Mosque","website":"https://www.facebook.com/AhmadiyyaMuslimCommunityGAChapter/","address":"1800 Willow Trail Parkway","city":"Norcross","county":"Gwinnett","zip":"30093","id":10069,"category":"english"},{"name":"Iglesia ni Cristo - Locale of North Atlanta [District of Virginia]","address":"5555 Oakbrook Parkway","city":"Norcross","county":"Gwinnett","zip":"30093","id":10070,"category":"spanish"},{"name":"Norcross Presbyterian Church","website":"http://www.norcrosspresbyterian.org/","address":"89 Jones Street Northwest","city":"Norcross","county":"Gwinnett","zip":"30071","id":10071,"category":"english"},{"name":"Bethel World Outreach Ministries Atlanta","address":"7094 Peachtree Industrial Boulevard","city":"Norcross","county":"Gwinnett","zip":"30071","id":10072,"category":"english"},{"name":"Iglesia petecostal jehova es mi pastor","address":"6000 Live Oak Parkway","city":"Norcross","county":"Gwinnett","zip":"30093","id":10073,"category":"spanish"},{"name":"Iglesia Adventista Metropolitana de Atlanta","website":"http://www.mirayvive.com/","address":"5990 Oakbrook Parkway","city":"Norcross","county":"Gwinnett","zip":"30093","id":10074,"category":"spanish"},{"name":"iglesia cristiana pentecostes senda antigua","address":"706 North Peachtree Street","city":"Norcross","county":"Gwinnett","zip":"30071","id":10075,"category":"spanish"},{"name":"Iglesia Cristiana Lluvias De Amor","address":"6070 South Norcross Tucker Road","city":"Norcross","county":"Gwinnett","zip":"30093","id":10076,"category":"spanish"},{"name":"Iglesia Bethesda","website":"https://www.facebook.com/pg/iglesiabethesdaga/about/?ref=page_internal","address":"600 Live Oak Parkway","city":"Norcross","county":"Gwinnett","zip":"30093","id":10077,"category":"spanish"},{"name":"Iglesia","address":"6087 Oakbrook Parkway","city":"Norcross","county":"Gwinnett","zip":"30093","id":10078,"category":"spanish"},{"name":"Iglesia Monte Sion","website":"http://iglesiamontesion.net/","address":"5380 Peachtree Industrial Boulevard","city":"Norcross","county":"Gwinnett","zip":"30071","id":10079,"category":"spanish"},{"name":"Iglesia Pentecostal Ciudad De Jehová","address":"6825 Jimmy Carter Boulevard","city":"Norcross","county":"Gwinnett","zip":"30071","id":10080,"category":"spanish"},{"name":"Patria House Evangelical Church","website":"http://patria.house/","address":"1854 Shackleford Court","city":"Norcross","county":"Gwinnett","zip":"30093","id":10081,"category":"english"},{"name":"IGLESIA PENTECOSTES CRISTO VIVE","address":"1470 Hillcrest Road","city":"Norcross","county":"Gwinnett","zip":"30093","id":10082,"category":"spanish"},{"name":"IGLESIA EL BUEN SAMARITANO","address":"6070 South Norcross Tucker Road","city":"Norcross","county":"Gwinnett","zip":"30093","id":10083,"category":"spanish"},{"name":"Beaver Ruin Church","website":"https://www.beaverruinbaptist.org/","address":"1200 Beaver Ruin Road","city":"Norcross","county":"Gwinnett","zip":"30093","id":10084,"category":"english"},{"name":"iglesia Pentecostal Nueva Jerusalen","address":"6111 Oakbrook Parkway","city":"Norcross","county":"Gwinnett","zip":"30093","id":10085,"category":"spanish"},{"name":"Glober Baptist Church","address":"5225 Jimmy Carter Boulevard","city":"Norcross","county":"Gwinnett","zip":"30093","id":10086,"category":"english"},{"name":"Atlanta Chin Baptist Church","address":"5225 Jimmy Carter Boulevard","city":"Norcross","county":"Gwinnett","zip":"30093","id":10087,"category":"english"},{"name":"Vietnamese Baptist Church of Jesus","address":"5225 Jimmy Carter Boulevard","city":"Norcross","county":"Gwinnett","zip":"30093","id":10088,"category":"english"},{"name":"All Saints Church","address":"5850 Castle Court Northwest","city":"Norcross","county":"Gwinnett","zip":"30093","id":10089,"category":"english"},{"name":"ANOINTED VISION CHURCH","address":"6191 Atlantic Boulevard","city":"Norcross","county":"Gwinnett","zip":"30071","id":10090,"category":"english"},{"name":"Saint James Church","city":"Norcross","county":"Gwinnett","zip":"30093","id":10091,"category":"english"},{"name":"Mitspa Hatian Baptist Church","address":"5225 Jimmy Carter Boulevard","city":"Norcross","county":"Gwinnett","zip":"30093","id":10092,"category":"english"},{"name":"Faith and Grace Baptist Church","website":"https://www.facebook.com/profile.php?id=100071994468784#","address":"3324 Medlock Bridge Rd","city":"Norcross","county":"Gwinnett","zip":"30092","ownLease":"O","landAreaAc":6.55,"spaceSize":8237.0,"churchContact":"Hak B Han","churchPhone":"(334) 354-8966 (p)\n(770) 938-2550 (m)","churchEmail":"contact@faithgracechurch.org / Hakbhan@gmail.com","propertyContact":"Vietnamese Faith Baptist Church","lastSoldTime":"2020-07-31","soldPrice":2180000.0,"id":10093,"category":"english"},{"name":"The Korean American Association of Greater Atlanta 애틀랜타 한인회","address":"5900 Brook Hollow Pkwy","city":"Norcross","county":"Gwinnett","zip":"30071","ownLease":"O","landAreaAc":9.02,"spaceSize":42600.0,"churchContact":"SIMONG HONG LEE","churchPhone":"(770) 813-8988","propertyContact":"The Korean American Association, Inc","lastSoldTime":"2014-06-20","soldPrice":2450000.0,"id":10094,"category":"korean"},{"name":"Holy Name of Jesus Chinese Catholic Mission","address":"5395 Light Cir NW","city":"Norcross","county":"Gwinnett","zip":"30071","ownLease":"O","landAreaAc":5.82,"spaceSize":14175.0,"churchContact":"Roman Catholic Archdiocese of Atlanta","id":10095,"category":"english"},{"name":"Change Church DeKalb","website":"https://lifechange.org/","address":"1170 North Hairston Road","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":22.0,"spaceSize":958320.0,"churchPhone":"(609) 434-0007","churchEmail":"changeinfo@lifechange.org","propertyContact":"Change Church","notes":"They are a fast growing church from NY. Also has a location in Gwinnett: 3080 Premiere Pkwy, Duluth, GA 30097","id":10096,"category":"english"},{"name":"Mar Thoma Church, Atlanta","website":"https://mtcatlanta.org/","address":"6015 Old Stone Mountain Road","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"O","landAreaAc":41.77,"spaceSize":394250.0,"churchPhone":"(770) 342-8071","churchEmail":"vicar@mtcatlanta.org","id":10097,"category":"english"},{"name":"Crossroads Presbyterian Church","website":"http://www.crossroads-pc.com/","address":"5587 Redan Road","city":"Stone Mountain","county":"DEKALB","zip":"30088","ownLease":"O","landAreaAc":10.15,"churchPhone":"(770) 469-9069","churchEmail":"office@crossroads-pc.com","id":10098,"category":"english"},{"name":"Ebenezer Baptist Church","website":"https://www.facebook.com/ebenezerstonemountain/","address":"5486 Stillhouse Road","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","churchContact":"Harvey Canty","churchPhone":"(770) 498-1758","churchEmail":"ebenezerstonemtn@gmail.com","id":10099,"category":"english"},{"name":"Rock of Ages Lutheran Church","website":"http://www.rockofageschurch.org/contact.html","address":"5135 Memorial Drive","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","churchPhone":"(404) 292-7888","churchEmail":"elcarock@bellsouth.net","id":10100,"category":"english"},{"name":"Rock Stone Church","website":"https://rockstonechurch.org/","address":"781 Main Street","city":"Stone Mountain","county":"DEKALB","zip":"30083","landAreaAc":0.62,"spaceSize":3188.0,"churchContact":"Pastor Eric Cannady","churchPhone":"(770) 469-3252","propertyContact":"Atlanta Metro Way Of The Cross","id":10101,"category":"english"},{"name":"Chin Community Baptist Church","website":"https://www.facebook.com/ccbcga/","address":"5580 Rockbridge Road Southwest","city":"Stone Mountain","county":"DEKALB","zip":"30088","ownLease":"O","landAreaAc":7.7,"spaceSize":23290.0,"churchPhone":"(404) 247-7355 / (404) 644-5554","churchEmail":"ccbc.atlanta.ga@gmail.com","id":10102,"category":"english"},{"name":"Bride Temple Church","website":"https://www.facebook.com/100064801023661/about/?ref=page_internal&mt_nav=0&_rdr","address":"5499 Stillhouse Road","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":1.0,"churchContact":"Simeon Anderson","churchPhone":"(770) 498-8989","notes":"Small black people church, might be an option","id":10103,"category":"english"},{"name":"St. Michael and All Angels Episcopal Church","website":"http://stmichaelstonemountain.org/","address":"6780 James B Rivers Memorial Drive","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":1.7,"churchPhone":"(770) 469-8551","churchEmail":"admin@stmichaelstonemountain.org","id":10104,"category":"english"},{"name":"Zo Christian Church Atlanta","website":"https://www.facebook.com/zccatlanta/","address":"1093 Panola Road","city":"Stone Mountain","county":"DEKALB","zip":"30088","ownLease":"O","landAreaAc":5.25,"spaceSize":4348.0,"churchPhone":"(404) 423-1211","churchEmail":"zccatlanta2016@gmail.com","propertyContact":"Laang Nang","propertyPhone":"770-681-4380","propertyEmail":"laangnang12@gmail.com","id":10105,"category":"english"},{"name":"Indian Creek Baptist Church","website":"https://indiancreek.church/","address":"3901 Rockbridge Road Southwest","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":5.9,"churchPhone":"(404) 292-6500","id":10106,"category":"english"},{"name":"Eastminster Presbyterian Church","website":"http://www.eastminster.us/","address":"5801 Hugh Howell Road","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"O","landAreaAc":6.5,"churchPhone":"(770) 469-4881","churchEmail":"office@eastminster.us","id":10107,"category":"english"},{"name":"Bethsaida Baptist Church","website":"https://www.facebook.com/HistoricBBC/","address":"853 4th Street","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":1.06,"churchPhone":"(770) 469-1278","churchEmail":"historicbbc@gmail.com","id":10108,"category":"english"},{"name":"Smoke Rise Baptist Church","website":"http://www.smokerisebaptist.org/","address":"5901 Hugh Howell Road","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"O","landAreaAc":15.6,"churchPhone":"(770) 469-5856","notes":"Mega church","id":10109,"category":"english"},{"name":"Christ Mission Church (CMC)","website":"http://cmcag.org/","address":"1039 Rays Road","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":3.93,"spaceSize":12393.0,"churchContact":"Pau Cin Thang","churchPhone":"(404) 553-5703","churchEmail":"cmc@cmcag.org","lastSoldTime":"2022-07-01","soldPrice":1425000.0,"id":10110,"category":"english"},{"name":"Emmanuel A.M.E. Zion Church","website":"https://www.facebook.com/p/Emmanuel-AME-Zion-church-100068305686312/","address":"5746 Rockbridge Road Southwest","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"O","landAreaAc":2.5,"spaceSize":14976.0,"churchPhone":"(770) 469-1569","notes":"I can't find the pastor name. might be an option","id":10111,"category":"english"},{"name":"Grace Church Of Stone Mountain","address":"1028 Second Street","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"N/A","landAreaAc":0.249,"spaceSize":5895.0,"churchPhone":"(877) 424-5380","notes":"I can't identify the ownership","id":10112,"category":"english"},{"name":"CHRIST COVENANT CHURCH","website":"http://christ-covenantchurch.org/","address":"6105 Rockbridge Road Southwest","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"O","landAreaAc":3.147,"spaceSize":2948.0,"churchPhone":"(404) 751-8811","notes":"I can't find the pastor name. might be an option","id":10113,"category":"english"},{"name":"St Paul Ame Church","address":"821 3rd Street","city":"Stone Mountain","county":"DEKALB","zip":"30083","churchPhone":"(770) 469-4995","id":10114,"category":"english"},{"name":"White Oak Hills Baptist Church","website":"http://www.whiteoakhillsbaptist.org/","address":"5171 Redan Road","city":"Stone Mountain","county":"DEKALB","zip":"30088","ownLease":"O","landAreaAc":16.9,"churchContact":"Dr. Jeffrey A. Easley","churchPhone":"(770) 469-4145","notes":"Don't see youth group, might be an option","id":10115,"category":"english"},{"name":"Memorial Drive Ministries","website":"http://mdmatl.org/","address":"5140 Memorial Drive","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":9.3,"spaceSize":35356.0,"churchContact":"David Roth","churchPhone":"(470) 240-5156","notes":"Mega Church","id":10116,"category":"english"},{"name":"The Vine Outreach Ministries","website":"http://www.thevineoutreachministries.org/","address":"6039 Rockbridge Road Southwest","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"O","landAreaAc":4.19,"spaceSize":1664.0,"churchContact":"Pastor Trey Harvey","churchPhone":"(470) 299-2689","lastSoldTime":"2018-09-14","soldPrice":219900.0,"notes":"Small church but might be an opportunity to sell","id":10117,"category":"english"},{"name":"New World Harvest Ministries","website":"https://www.newworldharvest.org/","address":"4624 Redan Road","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":0.3,"spaceSize":4784.0,"churchContact":"Pastor Michael A. Shinn","churchPhone":"(404) 292-2252","churchEmail":"harvestciti@gmail.com","notes":"Might be a potential","id":10118,"category":"english"},{"name":"Mas Que Vencedores Ministries","website":"https://www.facebook.com/iglesiacentralmqv/","address":"4678 Central Drive","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":7.23,"spaceSize":23668.0,"churchPhone":"(404) 499-2751","churchEmail":"mqvoffice@gmail.com","lastSoldTime":"2008-02-25","soldPrice":2000000.0,"notes":"Spanish church, I can't find the pastor name on their facebook.","id":10119,"category":"english"},{"name":"Judah House of Praise","website":"https://www.facebook.com/p/Judah-House-of-Praise-100064626494478/","address":"5670 Redan Road","city":"Stone Mountain","county":"DEKALB","zip":"30088","ownLease":"O","landAreaAc":0.512,"spaceSize":4574.0,"churchContact":"Pastor Stalely","churchPhone":"(770) 558-1663","churchEmail":"bishopcary49@gmail.com","lastSoldTime":"2005-07-21","soldPrice":240000.0,"notes":"small local church, black couple pastors. Don't have much parking lots","id":10120,"category":"english"},{"name":"Ethiopian Evangelical Church of Atlanta","website":"https://eecatlanta.com/","address":"4550 Greer Circle","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":21.25,"spaceSize":63338.0,"churchContact":"Dr. Pastor Tolessa Gudina","churchPhone":"770 496 1665","notes":"Big mega church","id":10121,"category":"english"},{"name":"Blessed Hope Ministries","website":"https://www.thatblessedhopeministries.org/","address":"2136 West Park Place Boulevard","city":"Stone Mountain","county":"Gwinnett","zip":"30087","ownLease":"L","landAreaAc":5.36,"spaceSize":4500.0,"churchContact":"Franklin Boulware","churchPhone":"(770) 674-7338","churchEmail":"info@thatblessedhopeministries.org","notes":"A church leased suite J/K/L. I can't find the suite size on costar","id":10122,"category":"english"},{"name":"Strong Tower Christian Life Ministries","website":"http://www.stclm.org/","address":"5478 Memorial Drive","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"L","landAreaAc":3.48,"spaceSize":"Can't identify","churchContact":"Jeffrey L. Toson","churchPhone":"(404) 228-8026","notes":"Leased space in a flex complex, 2-3 churches are there. need to visit to find out","id":10123,"category":"english"},{"name":"Antioch African Methodist Episcopal Church Inc.","website":"https://www.antioch-ame.org/","address":"4730 Elam Road","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":16.7,"spaceSize":"Can't identify","churchContact":"Vandy C. Simmons","churchPhone":"404-299-3388","churchEmail":"cscott@antioch-ame.org","lastSoldTime":"1998-05-29","soldPrice":1250000.0,"notes":"Big church, 2 buildings, have a day care on the site and another church is renting the space.","id":10124,"category":"english"},{"name":"Power of Praise Ministries","website":"https://powerofpraiseministries.com/","address":"6254 Memorial Drive","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"L","landAreaAc":13.0,"spaceSize":2200.0,"churchContact":"TITO J. PAUL","churchPhone":"(678) 544-9697","churchEmail":"info@powerofpraiseministries.com","notes":"leasing a space, nice website, looks growing","id":10125,"category":"english"},{"name":"Glory Life Church","address":"671 Main Street","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"L","id":10126,"category":"english"},{"name":"Atlanta Bethel Apostolic Church International Fellowship Ministry, Inc.","website":"https://www.facebook.com/ABACIFM","address":"485 South Indian Creek Drive","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","churchPhone":"(678) 469-2718","notes":"Residential House to hold a church","id":10127,"category":"english"},{"name":"Global Ethiopian Gospel Believers Church Inc","website":"https://gegbcatlanta.com/","address":"4528 Rockbridge Road Southwest","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":3.39,"spaceSize":25000.0,"lastSoldTime":"2025-06-18","soldPrice":1995000.0,"notes":"recently closed, the website is under construction","id":10128,"category":"english"},{"name":"Memorial Lighthouse Baptist Church","address":"6590 James B Rivers Memorial Drive","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":1.0,"churchContact":"Paul Pittard","churchPhone":"404-402-6212","notes":"Can't find much on the internet, legit church tho. Seems like the pastor is a real estate agent as well","id":10129,"category":"english"},{"name":"Pho Quang Temple Atlanta","address":"518 Stephenson Road","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"O","churchPhone":"(770) 756-3948","notes":"an asian temple","id":10130,"category":"english"},{"name":"Stone Mountain First United Methodist Church","website":"http://stonemountainfirst.org/","address":"5312 West Mountain Street","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":2.1,"spaceSize":35000.0,"churchContact":"Dr. Cynthia Jackson","churchPhone":"(770) 469-9767","churchEmail":"stonemountainumc@gmail.com","notes":"The county data is totally wrong. I meansure by myself. Big church","id":10131,"category":"english"},{"name":"Kingdom City Church","website":"https://www.facebook.com/kingdomcityhq/","address":"5419 Rockbridge Road Southwest","city":"Stone Mountain","county":"DEKALB","zip":"30088","ownLease":"O","landAreaAc":11.0,"churchContact":"james & mona harper","id":10132,"category":"english"},{"name":"Freedom House Church International, Stone Mountain, Georgia","website":"http://www.addisonadamuministries.org/","address":"1925 Glenn Club Drive","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"O","landAreaAc":1.66,"spaceSize":26244.0,"churchContact":"Addison Adamu","churchPhone":"(770) 817-7909","lastSoldTime":"2018-07-31","soldPrice":640000.0,"notes":"nice building, the church seems doing well","id":10133,"category":"english"},{"name":"First Baptist Church of Stone Mountain","website":"https://m.facebook.com/profile.php?id=100089749069639","address":"5301 Mimosa Drive","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":2.1,"spaceSize":18500.0,"churchContact":"I can't find on their FB","churchPhone":"(770) 469-6121","churchEmail":"stnmtnfbc@bellsouth.net","notes":"Again I have to measure the buidling, county data none. Very nice church. Worth to reach out","id":10134,"category":"english"},{"name":"Amazing Grace Christian Life Center","website":"https://agcccenter.weebly.com/","address":"1478 Stoneleigh Way","city":"Stone Mountain","county":"DEKALB","zip":"30088","ownLease":"O","landAreaAc":4.9,"spaceSize":6299.0,"churchContact":"Calvin Bolton","churchPhone":"(404) 632-1782","lastSoldTime":"2010-07-21","soldPrice":275000.0,"notes":"Pastor Calvin has been over 80s. The property looks not active. Seems they were trying to sell in 2014. Definately worth to visit.","id":10135,"category":"english"},{"name":"ROCKHILL CHURCH","website":"https://therockhillchurch.org/","address":"1959 Parker Court suite C","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"L","spaceSize":3702.0,"churchContact":"Dr. Badu","churchPhone":"(800) 875-5775","churchEmail":"info@therockhillchurch.org","notes":"Leasing in a flex buidling. fancy website and I think it will grow quick","id":10136,"category":"english"},{"name":"Voices of Faith Church","website":"https://www.facebook.com/VoicesofFaithChurch/","address":"2500 Rockbridge Road Southwest","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"O","landAreaAc":25.0,"spaceSize":23165.0,"churchContact":"Bishop Gary Hawkins Sr.","churchPhone":"(770) 498-5850","lastSoldTime":"2001-01-12","soldPrice":425000.0,"notes":"Mega Church but their website doesn't work. They have 4 buildings on the site. Maybe they can sell one to us.","id":10137,"category":"english"},{"name":"Church Of God (Seventh Day)","website":"https://www.facebook.com/p/Iglesia-de-Dios-Del-7mo-D%C3%ADa-Atlanta-Stone-Mountain-100068377734861/","address":"6751 Rockbridge Road Southwest","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"O","landAreaAc":5.15,"spaceSize":8000.0,"churchContact":"Walter Apen Castillo","churchPhone":"(470) 875-2223","churchEmail":"idd7atlanta@gmail.com","lastSoldTime":"2014-01-10","soldPrice":565000.0,"notes":"Latino Church, don't have a website but seems a lot of people","id":10138,"category":"english"},{"name":"Higher Level Worship Church","website":"http://www.higherlevelworship.org/","address":"6788 Rockbridge Road Southwest","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"O","landAreaAc":5.1,"spaceSize":13500.0,"churchContact":"Tyrone King","churchPhone":"(678) 585-1884","churchEmail":"admin@higherlevelworship.org","lastSoldTime":"2020-12-14","soldPrice":630000.0,"notes":"Nice Church, Idk if they will sell but definately worth to connect","id":10139,"category":"english"},{"name":"Empowered To Win International Ministries","website":"http://empoweredtowinim.com/","address":"1960 D, Parker Ct, Stone Mountain, GA 30087","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"L","churchContact":"Wayne A Smith","churchPhone":"(770) 686-3878","churchEmail":"empoweredtowinim8@gmail.com","id":10140,"category":"english"},{"name":"TRUTH TABERNACLE OF PRAISE INC","website":"https://www.ttop.org/about_us","address":"5705 Memorial Drive","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":7.45,"spaceSize":14278.0,"churchContact":"Bobby Atkins","churchPhone":"(678) 559-4441","churchEmail":"truthtab@googlegroups.com","lastSoldTime":"2007-03-30","soldPrice":800000.0,"notes":"Nice church. Pastor Bobby is an old white guy. There is another church is renting the space at the moment.","id":10141,"category":"english"},{"name":"Christian Compass Ministries","website":"https://www.facebook.com/TheChristianCompass/","address":"2305 West Park Place Boulevard suite O","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"L","spaceSize":3430.0,"churchContact":"Larry D Johns","churchPhone":"(770) 823-8094","churchEmail":"info@christiancompassministries.org","notes":"Flex property, they leased since 2018.","id":10142,"category":"english"},{"name":"Chin Presbyterian Church Atlanta","website":"https://www.facebook.com/p/Chin-Presbyterian-Church-Atlanta-100064958973563/","address":"1142 Rockbridge Road Southwest","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"O","landAreaAc":0.95,"spaceSize":2060.0,"churchContact":"Pastor Chin","churchPhone":"(269) 419-5421","churchEmail":"chinpca2013@gmail.com","lastSoldTime":"2020-01-30","soldPrice":220000.0,"notes":"Little house church, could be a potential client to relocate","id":10143,"category":"english"},{"name":"Zion Baptist Church","address":"1512 Roadheaven Dr","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":3.0,"spaceSize":2700.0,"notes":"It is a legit building and the owner is real. But I can't find any website or socials online...","id":10144,"category":"english"},{"name":"Atlanta Mosque Inc","website":"https://alfarooqmasjid.org/services/fatimah-masjid/","address":"1836 Rockbridge Road Southwest","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"O","landAreaAc":5.41,"spaceSize":36906.0,"churchPhone":"(770) 912-0348","notes":"a mosque. They received as a donation","id":10145,"category":"english"},{"name":"First Moravian Church-Georgia","website":"https://www.gamoravian.org/","address":"4950 Hugh Howell Road","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"O","landAreaAc":4.34,"spaceSize":9272.0,"churchContact":"Elroy Christopher","churchPhone":"(770) 655-0915","churchEmail":"pastorfirstmoravian@gmail.com","notes":"Under Moravian church association","id":10146,"category":"english"},{"name":"Iglesia Bautista Ágape","website":"http://www.iglesiabautistaagape.org/","address":"5485 Five Forks Trickum Road","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"O","landAreaAc":9.73,"spaceSize":80041.0,"churchPhone":"(678) 414-2110","notes":"Mega Church","id":10147,"category":"spanish"},{"name":"Atlanta Matupi Community Church","website":"http://www.facebook.com/AtlantaMCC","address":"650 Rowland Road","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":9.6,"spaceSize":11000.0,"churchPhone":"(404) 956-6175","lastSoldTime":"2020-02-19","soldPrice":435000.0,"notes":"I can't read their FB. So I can't find the pastor name","id":10148,"category":"english"},{"name":"Abune Gebre Menfes Qidus Ethiopian Orthodox Tewahido Church","website":"https://www.atlantaabo.org/","address":"4575 Stonegate Industrial Boulevard","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":4.87,"spaceSize":28800.0,"churchContact":"I can't find on the website","churchPhone":"(678)609-3682","churchEmail":"atl.abo.eotc@gmail.com","lastSoldTime":"2013-11-14","soldPrice":895000.0,"notes":"Atlanta Abo is a parish under the Ethiopian Orthodox Tewahedo Church","id":10149,"category":"english"},{"name":"New Jerusalem Church of God","website":"http://www.newjerusalemapostolic.org/","address":"5258 Rockbridge Drive","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"O","landAreaAc":3.8,"spaceSize":6000.0,"churchContact":"Bishop Altamont George Blackwood","churchPhone":"(770) 864-9585","lastSoldTime":"2010-02-11","soldPrice":360000.0,"notes":"Church under NJC, HQ in new york","id":10150,"category":"english"},{"name":"Thrive Zone Church","website":"http://www.thrivezone.life/","address":"1999 Parker Court","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"L","churchPhone":"(470) 543-0358","id":10151,"category":"english"},{"name":"Bethel Church","website":"https://www.facebook.com/pages/Bethel%20Church/146005952093426/#","address":"1147 Panola Road","city":"Stone Mountain","county":"DEKALB","zip":"30088","ownLease":"O","landAreaAc":2.8,"spaceSize":8500.0,"notes":"The owner is correct but I'm confused by their website. It's something in CA.","id":10152,"category":"english"},{"name":"St. Thomas Orthodox Church","website":"http://www.stoca.org/","address":"5720 Lilburn Stone Mountain Road","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"O","landAreaAc":5.1558,"spaceSize":20000.0,"churchContact":"H.H. Baselios Marthoma Mathews III","churchPhone":"(678) 820-9362","lastSoldTime":"2008-07-15","soldPrice":1244250.0,"notes":"Orthodox church very complex","id":10153,"category":"english"},{"name":"Stone Mountain SDA Church","website":"https://stonemountainsda.com/","address":"1350 Silver Hill Road","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"O","landAreaAc":10.6,"spaceSize":16500.0,"churchContact":"CJ Cousins","churchPhone":"(770) 469-0111","notes":"7days conference owned.","id":10154,"category":"english"},{"name":"CHEC New Life Chapel","website":"http://chechouseofjoseph.org/","address":"2155 West Park Court, suite H","city":"Stone Mountain","county":"DEKALB","zip":"30087","ownLease":"L","churchContact":"I can't find the name","churchPhone":"(708) 969-1820","churchEmail":"houseofjosephchec@gmail.com","notes":"New Life Chapel, is a branch of Christ Healing Evangelical Church Worldwide","id":10155,"category":"english"},{"name":"Berean Christian Church","website":"http://www.bereanchristianchurch.org/","address":"2201 Young Road","city":"Stone Mountain","county":"DEKALB","zip":"30088","ownLease":"O","landAreaAc":29.649,"churchContact":"Dr. Lee","churchPhone":"(770) 593-4421","notes":"Mega church very influenced in Dekalb county","id":10156,"category":"english"},{"name":"Georgia Senthang Baptist Church","website":"https://www.facebook.com/gsbc.atl/","address":"4190 Cedar Ridge Trail","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":14.0,"churchContact":"Kha Lian","churchPhone":"(678) 538-7497","lastSoldTime":"2023-08-03","soldPrice":800000.0,"notes":"We were under contract but fall through for Go forward karen church","id":10157,"category":"english"},{"name":"Georgia Chin Baptist Church","website":"https://www.facebook.com/georgiachinbaptistchurch","address":"640 Allgood Road","city":"Stone Mountain","county":"DEKALB","zip":"30083","ownLease":"O","landAreaAc":7.0,"spaceSize":21724.0,"churchContact":"Ceu Peng Lian","churchPhone":"(678) 637-7743","churchEmail":"gachinbaptistpastor@outlook.com","lastSoldTime":"2023-05-30","soldPrice":2500000.0,"id":10158,"category":"english"},{"name":"Go Forward Karen Baptist Church Georgia, Inc","address":"5090 Redan Rd","city":"Stone Mountain","county":"DEKALB","zip":"30088","ownLease":"O","landAreaAc":7.21,"spaceSize":8000.0,"churchContact":"Hsa Hai","churchPhone":"(404) 974-5607","lastSoldTime":"2023-07-10","soldPrice":975000.0,"notes":"Our old client","id":10159,"category":"english"},{"name":"Independent Church of God of Atlanta","website":"https://www.icgatlanta.com/","churchType":"Sabbatarian","address":"2371 Pleasantdale Road","city":"Doraville","county":"Gwinnett","zip":"30340","ownLease":"O","landAreaAc":1.5,"spaceSize":5000.0,"churchPhone":"678-395-5796","churchEmail":"contact@icgatlanta.com","lastSoldTime":"2007-06-20","soldPrice":598000.0,"id":10160,"category":"english"},{"name":"North Atlanta Bible Chapel","website":"https://www.facebook.com/p/North-Atlanta-Bible-Chapel-100064492940739/","churchType":"Non-denominational","address":"3832 McElroy Rd","city":"Doraville","county":"Dekalb","zip":"30340","ownLease":"O","landAreaAc":4.0,"spaceSize":11080.0,"lastSoldTime":"2013-11-01","soldPrice":650000.0,"id":10161,"category":"english"},{"name":"Encounter Church","website":"https://ecollective.church/","churchType":"Non-denominational","address":"4209 Northeast Expy","city":"Doraville","county":"Dekalb","zip":"30340","ownLease":"O","landAreaAc":1.58,"spaceSize":30000.0,"lastSoldTime":"2007-09-04","soldPrice":1753000.0,"notes":"Next Thursday 1pm meet with pastor Gabriel. They leased this space.","id":10162,"category":"english"},{"name":"Revival Church of Atlanta","website":"https://revivalchurchatl.com/","churchType":"Iglesia","address":"4187 Northeast Expy","city":"Doraville","county":"Dekalb","zip":"30340","ownLease":"L","landAreaAc":1.08,"spaceSize":"unknown","propertyContact":"Sk Eye Care Inc","lastSoldTime":"2004-11-18","soldPrice":382700.0,"notes":"Nice church and there is a for rent sign 678-777-5817","id":10163,"category":"english"},{"name":"Grace Fellowship Ministries - 7th Day","website":"https://www.gfmatl.org/","churchType":"7th Day","address":"4183 Northeast Expy","city":"Doraville","county":"Dekalb","zip":"30340","ownLease":"L","landAreaAc":1.11,"spaceSize":"unknown","propertyContact":"Alfredo Polo","propertyPhone":"(678) 776-4170","lastSoldTime":"2005-10-19","soldPrice":700000.0,"notes":"Nice space no one here left a trifold","id":10164,"category":"english"},{"name":"Iglesia Adventista del Este","website":"https://katwebs.wixsite.com/iglesiadeleste","address":"1295 Jennie Ln SW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":1.96,"spaceSize":1536.0,"churchPhone":"404-573-7326","churchEmail":"eachurch2@gmail.com","propertyContact":"South Atlantic Conference Association Of Sda Inc","propertyPhone":"(404)-792-0535","propertyEmail":"info@sacsda.org","id":10165,"category":"spanish"},{"name":"Iglesia Cristiana Roca de Salvacion","address":"360 Killian Hill Rd NW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"L","landAreaAc":2.61,"spaceSize":2000.0,"propertyContact":"Mark Light","propertyPhone":"404-683-9501","propertyEmail":"mlight8581@gmail.com","id":10166,"category":"spanish"},{"name":"Ministerio Agua Para Las Vidas Sedientas","website":"https://www.aguaparavidas.com/","address":"656 Indian Trail Lilburn Rd NW Suite 205","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"L","landAreaAc":2.09,"spaceSize":4275.0,"churchPhone":"470-913-3695","id":10167,"category":"spanish"},{"name":"Camp Creek Church Primitive Baptist Church","website":"https://www.campcreek.church/","address":"302 Camp Creek Rd SW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":5.35,"spaceSize":4604.0,"churchPhone":"(770) 921-3271","churchEmail":"Pastor@CampCreek.Church","id":10168,"category":"english"},{"name":"Living Way Vietnamese Church - Hội Thánh Tin Lành Đường Sống","website":"https://www.hoithanhtinlanhduongsong.org/","address":"485 Killian Hill Rd SW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":4.53,"spaceSize":5400.0,"churchPhone":"770-837-5604","churchEmail":"info@hoithanhtinlanhduongsong.org","id":10169,"category":"english"},{"name":"Iglesia Bautista Buenas Nuevas","website":"https://iglesia-lilburn.org/","address":"101 Killian Hill Rd SW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":5.52,"spaceSize":5717.0,"churchPhone":"(770) 674-0475","churchEmail":"salvosporgracia@aol.com","id":10170,"category":"spanish"},{"name":"Lilburn Global Christian Ministry","website":"https://lgcministry.org/","address":"908 Killian Hill Rd SW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":2.33,"spaceSize":6715.0,"id":10171,"category":"english"},{"name":"Resurrection Bapt Church","website":"https://www.facebook.com/ResurrectionMBC/","address":"655 Beaver Ruin Rd","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":4.8,"spaceSize":6893.0,"churchContact":"Rev.Lamar","propertyEmail":"1200 Appian Way, Lawrenceville, GA 30046","id":10172,"category":"english"},{"name":"CENTRAL BAPTIST CHURCH","website":"https://www.centralbchurch.org/","address":"795 Dickens Rd NW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":1.72,"spaceSize":7040.0,"churchContact":"Marvin Jones","churchPhone":"770-925-3838","id":10173,"category":"english"},{"name":"Biserica Ortodoxa Romana Sfintii Imparati Constantin si Elena","website":"https://www.scechurch.org/","address":"664 Dickens Rd NW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":15.11,"spaceSize":"Wrong data","id":10174,"category":"english"},{"name":"Lilburn Cooperative Ministry, Inc.","website":"https://lilburnco-op.org/","address":"5329 Five Forks Trickum Rd SW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":1.04,"spaceSize":7252.0,"churchContact":"Jackie Wells Smith","churchPhone":"(770) 931-8333","churchEmail":"info@lilburncoop.org","id":10175,"category":"english"},{"name":"Holy Apostles Peter and Paul Orthodox Church","website":"https://www.atlantaserbs.com/","address":"1558 Hewatt Rd SW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":7.39,"spaceSize":7277.0,"churchPhone":"(724) 219-5456","churchEmail":"frmiladin@gmail.com","id":10176,"category":"english"},{"name":"Luxomni Church","website":"https://luxomni.org/","address":"175 Luxomni Rd","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":7.93,"spaceSize":7608.0,"churchPhone":"770-925-0931","churchEmail":"staff@luxomni.org","id":10177,"category":"english"},{"name":"The Redeemed Christian Church of God Peace Assembly","website":"https://www.rccgpeaceassemblyga.com/","address":"2158 McDaniel's Bridge Court","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":1.29,"spaceSize":8577.0,"churchContact":"Francis Tekobo","churchPhone":"404-641-9248/(678) 344-9290","churchEmail":"rccgpeaceassemblymedia@gmail.com","id":10178,"category":"english"},{"name":"The Nett Church","website":"https://www.thenettchurch.com/","address":"675 Pleasant Hill Rd","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":7.58,"spaceSize":8681.0,"churchContact":"Rev. Dr. Nora Colemaneres","churchPhone":"770-923-1403","churchEmail":"contact@thenettchurch.com","id":10179,"category":"english"},{"name":"Iglesia de Georgia","website":"https://www.iglesiadegeorgia.com/","address":"345 Killian Hill Rd NW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":0.97,"spaceSize":9840.0,"churchContact":"Miguel","churchPhone":"(770) 813-9700","churchEmail":"info@idg.church","id":10180,"category":"spanish"},{"name":"Lilburn Oaks Baptist Church","website":"https://lilburnoaksbaptist.com/","address":"4513 Burns Rd NW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":8.0,"spaceSize":10453.0,"churchContact":"Phil Connell","churchPhone":"770-381-1926","churchEmail":"info@lilburnoaksbaptist.com","id":10181,"category":"english"},{"name":"Iglesia RDS","website":"https://www.facebook.com/IglesiaRDS.atl","address":"750 Indian Trail Lilburn Rd NW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":1.74,"spaceSize":13800.0,"churchEmail":"iglesiardsayp@gmail.com","propertyContact":"De Ventura Nehemias","id":10182,"category":"spanish"},{"name":"Oak Road Lutheran Church","website":"https://www.oakroadlutheran.org/","address":"1004 Oak Rd SW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":4.98,"spaceSize":13960.0,"churchContact":"Rev. Dr. David Kruger","churchPhone":"770-979-6391","churchEmail":"oakroadlutheran@gmail.com","id":10183,"category":"english"},{"name":"Salem Missionary Baptist Church","website":"https://www.thechurchwithzeal.org/","address":"4700 Church St NW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":4.87,"spaceSize":15195.0,"churchPhone":"770-923-3936","id":10184,"category":"english"},{"name":"Cornerstone Bible Church","website":"https://cbclilburn.org/","address":"869 Cole Dr SW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":4.99,"spaceSize":15964.0,"churchPhone":"(770) 806-0005","id":10185,"category":"english"},{"name":"Apostles and Prophets Hispanic Church Mount Hermon","website":"https://www.facebook.com/iglesiaapostolesyprofetas?locale=ms_MY","address":"654 Beaver Ruin Rd","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":3.61,"spaceSize":16485.0,"churchPhone":"(678) 878-1842","id":10186,"category":"spanish"},{"name":"MC3 Church","website":"https://mc3.life/","address":"4415 Stone Mountain Hwy","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":2.48,"spaceSize":19376.0,"churchPhone":"770-783-1035","churchEmail":"info@mc3.life","id":10187,"category":"english"},{"name":"Iglesia Pentecostal Puerta de Salvación","website":"https://www.facebook.com/p/Iglesia-pentecostal-puerta-de-Salvacion-Inc-100064592746629/","address":"700 Indian Trail Lilburn Rd NW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":0.47,"spaceSize":20473.0,"churchPhone":"(470) 569-2434","id":10188,"category":"spanish"},{"name":"Trinity Lutheran Church","website":"https://www.tlc-lilburn.org/","address":"1826 Killian Hill Rd SW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":5.88,"spaceSize":21379.0,"churchPhone":"(770) 972-4418","churchEmail":"info@tlc-lilburn.org","id":10189,"category":"english"},{"name":"Lucerne Baptist Church","website":"https://www.lucernebaptist.org/","address":"4805 Stone Mountain Hwy","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":5.43,"spaceSize":25020.0,"churchPhone":"(770) 972-7730","churchEmail":"welcome@lucernebaptist.org","id":10190,"category":"english"},{"name":"Parkview Church","website":"https://parkviewchurch.net/","address":"4875 Lilburn Stone Mountain Rd","city":"Lilburn","county":"Gwinnett","zip":"30047","landAreaAc":9.07,"spaceSize":26356.0,"churchPhone":"770-279-1929","churchEmail":"office@parkviewchurch.net","propertyContact":"Jose Luis Sando Sanchez","propertyEmail":"The owner lives in the nexr door parcel","id":10191,"category":"english"},{"name":"The Church of Jesus Christ of Latter-day Saints","website":"https://local.churchofjesuschrist.org/en/us/ga/lilburn/1150-cole-road-southwest?utm_source=gmb&utm_medium=yext&y_source=1_MjM3Mzc5NTQtNzE1LWxvY2F0aW9uLndlYnNpdGU%3D","address":"1150 Cole Dr SW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":13.03,"spaceSize":26575.0,"churchPhone":"(678) 234-6815","id":10192,"category":"english"},{"name":"Jubilee Christian Church International","website":"https://jccihog.org/","address":"701 Cole Dr SW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":4.63,"spaceSize":26592.0,"churchPhone":"(770) 413-0202","churchEmail":"secretary@jccihog.org","id":10193,"category":"english"},{"name":"Iglesia Bautista Hispanoamericana","website":"https://www.libh.org/","address":"4109 Burns Rd NW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":10.05,"spaceSize":29849.0,"churchPhone":"770-381-8032","churchEmail":"rruiz@libh.org","id":10194,"category":"spanish"},{"name":"Calvary Chapel Stone Mountain","website":"https://calvarycsm.com/","address":"1969 McDaniels Bridge Rd SW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":14.62,"spaceSize":31052.0,"churchPhone":"770.736.2828","churchEmail":"office@calvarycsm.com","id":10195,"category":"english"},{"name":"Iglesia Cristiana Nuevo Comienzo Atlanta","website":"https://nuevocomienzoatlanta.com/","address":"661 Rockbridge Rd NW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":11.38,"spaceSize":31374.0,"churchPhone":"770-467-3141","id":10196,"category":"spanish"},{"name":"Misión católica de Nuestra Señora de las Américas","website":"https://www.oloacm.org/","address":"4603 Lawrenceville Hwy","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":8.02,"spaceSize":32198.0,"churchPhone":"(770) 717-1517","id":10197,"category":"english"},{"name":"St. John Neumann Catholic Church","website":"https://sjnlilburn.com/","address":"801 Tom Smith Rd SW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":22.8,"spaceSize":36784.0,"churchPhone":"(770) 923-6633","churchEmail":"parish@sjnlilburn.com","id":10198,"category":"english"},{"name":"Good Shepherd Presbyterian Church","website":"http://www.goodshepherdpc.org/","address":"1400 Killian Hill Rd SW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":10.38,"spaceSize":38519.0,"churchPhone":"(770) 921-7434","churchEmail":"office@goodshepherdpc.org","id":10199,"category":"english"},{"name":"Lilburn Christian Church","website":"https://www.lilburnchristianchurch.org/","address":"314 Arcado Rd","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":3.82,"spaceSize":42334.0,"churchPhone":"770-921-2993","churchEmail":"office@lilburncc.com","id":10200,"category":"english"},{"name":"Yellow River Baptist Church","website":"https://www.yellowriverbaptist.com/","address":"3650 Five Forks Trickum Rd SW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":16.34,"spaceSize":51891.0,"churchPhone":"770-972-5580","churchEmail":"info@YellowRiverBaptist.com","id":10201,"category":"english"},{"name":"Church On A Hill","website":"https://www.churchonahill.com/","address":"5255 Lawrenceville Hwy","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":7.84,"spaceSize":52729.0,"churchPhone":"(770) 921-9106","churchEmail":"office@churchonahill.com","id":10202,"category":"english"},{"name":"Berean Baptist Church","website":"https://www.bbclilburn.org/","address":"1405 Hewatt Rd SW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":7.0,"spaceSize":60144.0,"churchPhone":"(770) 985-5318","id":10203,"category":"english"},{"name":"Killian Hill Baptist Church","website":"https://www.khbc.org/","address":"151 Arcado Rd","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":27.28,"spaceSize":90724.0,"churchPhone":"770-921-3224","churchEmail":"office@khbc.org","id":10204,"category":"english"},{"name":"New Mercies Christian Church (Ministry Suites)","website":"https://newmerciescc.org/","address":"4000 Five Forks Trickum Rd SW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"L","landAreaAc":10.56,"spaceSize":92000.0,"churchPhone":"770-925-8600","churchEmail":"newmercies@newmerciescc.org","propertyContact":"Theresa Wilmot","propertyPhone":"(404) 578-2022","propertyEmail":"theresa@wilmotcompany.com","id":10205,"category":"english"},{"name":"Iglesia Alfa y Omega Atl","website":"https://www.iglesiaalfayomegaatl.com/","address":"5343 Lawrenceville Hwy","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"L","landAreaAc":16.26,"spaceSize":93310.0,"churchPhone":"678-668-5061","churchEmail":"alfayomegaco@gmail.com","propertyContact":"Morris Podber","propertyPhone":"(404) 771-8404","propertyEmail":"mpodber@aol.com","id":10206,"category":"spanish"},{"name":"First Baptist Church - Lilburn","website":"https://www.firstbaptist.net/","address":"285 Main St NW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":11.21,"spaceSize":109981.0,"churchPhone":"770-921-1220","churchEmail":"office@firstbaptist.net","id":10207,"category":"english"},{"name":"The Awaken Church | Ministerios ELIM","website":"https://www.theawakenchurch.org/","address":"3993 Lawrenceville Hwy Suite 105","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"L","landAreaAc":3.24,"churchPhone":"(706) 623-3529","id":10208,"category":"english"},{"name":"St Stephen the Martyr","website":"https://www.ststephenthemartyr.info/","address":"5373 Wydella Rd SW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":15.71,"spaceSize":14712.0,"churchContact":"Fr. Brian Lorei","churchPhone":"(770) 381-7488","churchEmail":"secretary@ststephenthemartyr.info","id":10209,"category":"english"},{"name":"Hansarang Presbyterian Church","address":"4683 LAWRENCEVILLE HWY NW","city":"Lilburn","county":"Gwinnett","zip":"30047","ownLease":"O","landAreaAc":0.78,"spaceSize":6440.0,"churchContact":"Lee Sin","churchPhone":"(770) 381-7488","propertyContact":"HAN SA RANG KOREAN PRESBYTERIAN CHURCH INC","id":10210,"category":"english"},{"name":"First United Methodist Church of Tucker","website":"http://www.tuckerfirst.org/","address":"5095 Lavista Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":1.95,"churchPhone":"(770) 938-3030","id":10211,"category":"english"},{"name":"One Mission Church (formerly Lilburn Alliance Church)","website":"http://onemission.church/","address":"5915 Lawrenceville Highway","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":5.45,"spaceSize":38585.0,"churchPhone":"(770) 921-1843","id":10212,"category":"english"},{"name":"St Andrews Presbyterian Church- Worship with us Sundays at 10am","website":"http://www.sapctucker.org/","address":"4882 Lavista Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":8.6,"spaceSize":49290.0,"churchContact":"Camille LeBron","churchPhone":"(770) 938-2833","churchEmail":"camille@SAPCtucker.org","id":10213,"category":"english"},{"name":"First Christian Church of Atlanta","website":"http://www.firstchristianatlanta.org/","address":"4532 Lavista Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":4.98,"spaceSize":"No Record","churchContact":"Tom Edmondson","churchPhone":"(770) 939-4358","id":10214,"category":"english"},{"name":"Rehoboth Baptist Church","website":"http://rehoboth.org/","address":"2997 Lawrenceville Highway","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"o","landAreaAc":23.9,"spaceSize":116200.0,"churchContact":"Troy Bush","churchPhone":"(770) 939-3182","churchEmail":"welcomecenter@rehoboth.org","id":10215,"category":"english"},{"name":"Atlanta First Hispanic Seventh-day Adventist Church","website":"https://www.atlantaprimera.org/","address":"111 Pounds Dr","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":5.35,"spaceSize":12263.0,"churchContact":"Ronald Rojas","churchPhone":"(770) 381-3808","churchEmail":"pastor@atlantaprimera.org","lastSoldTime":"2002-02-07","soldPrice":300000.0,"id":10216,"category":"spanish"},{"name":"Northlake Church of Christ","website":"http://www.northlake.org/","address":"1625 Cooledge Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":22.76,"spaceSize":34309.0,"churchContact":"Chris Armstead","churchPhone":"(770) 414-8717","churchEmail":"info@northlake.org","id":10217,"category":"english"},{"name":"Lawrenceville Road United Methodist Church","website":"https://www.lrumc.com/","address":"3142 Lawrenceville Highway","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":5.3,"spaceSize":"No Record","churchContact":"Dondra Davis","churchPhone":"(770) 939-3717","churchEmail":"lrumcoffice@gmail.com","notes":"Look like an old church, members are old too. might be a potential for sale","id":10218,"category":"english"},{"name":"First Baptist Church of Tucker","website":"http://www.fbctucker.org/","address":"5073 Lavista Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":2.1,"spaceSize":"No Record","churchContact":"Andrew McNair","churchPhone":"(770) 938-1688","churchEmail":"hello@mainstreettucker.church","id":10219,"category":"english"},{"name":"Momentum City Church","website":"http://www.momentumcity.org/","address":"1722 Montreal Circle","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"L","landAreaAc":0.5,"spaceSize":4256.0,"churchContact":"Thomas L. Cody","churchPhone":"(770) 756-3250","propertyContact":"Kc Investment Group Llc","lastSoldTime":"2020-04-14","soldPrice":600000.0,"id":10220,"category":"english"},{"name":"Tucker Presbyterian Church","website":"https://www.tuckerpres.org/","address":"6575 Cherokee Drive Northwest","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":19.16,"spaceSize":168524.0,"churchContact":"Erik Veerman","churchPhone":"(678) 872-2032","churchEmail":"church@tuckerpres.org","id":10221,"category":"english"},{"name":"St. John Apostolic Holiness Church","website":"https://www.facebook.com/OfficialStjohnAHC/","address":"1903 Clark Drive","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":0.61,"spaceSize":"No Record","churchPhone":"(770) 939-5220","churchEmail":"stjohnapostolicholinesschurch@gmail.com","notes":"old church, not many info online","id":10222,"category":"english"},{"name":"Freedom Church of Gwinnett","website":"http://www.freedomchurchlive.org/","address":"5357 Royal Woods Parkway","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":5.864,"spaceSize":46400.0,"churchContact":"Gregory Baker","churchEmail":"info@freedomchurchlive.org","propertyContact":"LSH Properties 2010 LLC.","lastSoldTime":"2011-09-19","soldPrice":1810000.0,"id":10223,"category":"english"},{"name":"Word of Life Intl Church of God","website":"http://www.wolicog.org/","address":"4881 Lawrenceville Highway","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":5.647,"spaceSize":12128.0,"churchContact":"Kenneth Hanson Jr.","churchPhone":"(678) 937-9897","churchEmail":"info@wolicog.org","id":10224,"category":"english"},{"name":"The Church of Jesus Christ of Latter-day Saints","website":"https://local.churchofjesuschrist.org/en/us/ga/tucker/1947-brockett-road?utm_source=gmb&utm_medium=yext&y_source=1_MjM3Mzc5NTItNzE1LWxvY2F0aW9uLndlYnNpdGU%3D","address":"1947 Brockett Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":6.234,"churchContact":"The Church of Jesus Christ of Latter-day Saints","churchPhone":"(678) 464-0581","id":10225,"category":"english"},{"name":"Atlanta Chinese Christian Church","website":"http://www.accc.org/","address":"4434 Britt Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":5.0,"spaceSize":34729.0,"churchContact":"Shaochang Lv","churchPhone":"(770) 908-1972","churchEmail":"info@accc.org","id":10226,"category":"english"},{"name":"Apostolic Triumphant Church International","website":"http://www.atcisuccessinternational.com/","address":"4727 North Royal Atlanta Drive","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"L","landAreaAc":4.791,"spaceSize":7780.0,"churchContact":"Dr. Bala","churchPhone":"(770) 912-4141","churchEmail":"atciatlanta@gmail.com","id":10227,"category":"english"},{"name":"Living Grace Lutheran Church","website":"http://www.livinggracelutheran.org/","address":"1812 Cooledge Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":5.26,"spaceSize":14794.0,"churchContact":"David Hardy","churchPhone":"(678) 406-9229","lastSoldTime":"2004-02-02","soldPrice":1000000.0,"notes":"Nice church, members look old","id":10228,"category":"english"},{"name":"God Is Good Assembly Ministries","address":"3597 Lawrenceville Highway","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"L","landAreaAc":0.5,"spaceSize":3940.0,"churchPhone":"(678) 670-8690","id":10229,"category":"english"},{"name":"Korean First Presbyterian Church","website":"http://www.kfpchurch.com/","address":"6175 Lawrenceville Highway","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":21.31,"spaceSize":49042.0,"churchPhone":"(770) 934-8282","id":10230,"category":"korean"},{"name":"Triumphant Chapel International Church","website":"http://www.tcichurch.org/","address":"4901 South Royal Atlanta Drive","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"L","landAreaAc":2.5,"spaceSize":5000.0,"churchContact":"Joseph K. Eshun","churchPhone":"(770) 744-7340","churchEmail":"info@tcichurch.org","id":10231,"category":"english"},{"name":"Global Change Ministries Inc","address":"1901 Montreal Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"L","churchPhone":"(470) 922-3170","id":10232,"category":"english"},{"name":"Greater New & Living Way International Deliverance Ministries Inc.","address":"4213 Fellowship Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"L","churchPhone":"(678) 395-6027","id":10233,"category":"english"},{"name":"Destiny Divine Ministries","address":"3531 Lawrenceville Highway","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"L","churchPhone":"(678) 205-8646","id":10234,"category":"english"},{"name":"Holy Spirit Fire Ministries","address":"2730 Mountain Industrial Boulevard","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"L","churchPhone":"(678) 663-1432","id":10235,"category":"english"},{"name":"Joy of Faith Christian Ministries","website":"http://jofchristianministries.org/","address":"1901 Montreal Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"L","churchPhone":"(678) 476-1010","id":10236,"category":"english"},{"name":"Networks Cooperative Ministry","website":"http://www.networkscoop.org/","address":"4296 Cowan Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":0.72,"spaceSize":10445.0,"churchContact":"Frederick Zak","churchPhone":"(770) 939-6454","id":10237,"category":"english"},{"name":"Solomon’s Porch Ministries","website":"https://spmatlanta.com/","address":"1986 Tucker Industrial Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"L","churchPhone":"(404) 390-3333","id":10238,"category":"english"},{"name":"Kingdom Investment Ministry","website":"http://kingdominvestmentministry.org/","address":"2219 Idlewood Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":0.83,"spaceSize":9000.0,"churchPhone":"(770) 934-9994","churchEmail":"jp.murphy@rocketmail.com","lastSoldTime":"2006-12-12","soldPrice":430000.0,"id":10239,"category":"english"},{"name":"God's Amazing Grace Christian Ministries","website":"https://www.godsamazinggracecm.org/","address":"Virtual platform","city":"Tucker","county":"DeKalb","zip":"30084","churchPhone":"(712) 770-4895","id":10240,"category":"english"},{"name":"IGLESIA PENTECOSTAL TABERNACULO DE FUEGO","website":"https://www.facebook.com/IglesiaTabernaculodeFuego/","address":"1806 Fellowship Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":4.6,"churchContact":"Isidro Medrano","churchPhone":"(404) 456-4564","lastSoldTime":"2012-05-01","soldPrice":510000.0,"id":10241,"category":"spanish"},{"name":"Iglesia Evangélica Dios Habla Hoy","address":"3981 Lawrenceville Highway","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"L","churchPhone":"(678) 508-0165","id":10242,"category":"spanish"},{"name":"Iglesia De Cristo Mas Que","address":"4339 Hugh Howell Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"L","churchPhone":"(404) 499-2751","id":10243,"category":"spanish"},{"name":"Iglesia Evangelical Apostle","address":"2162 Fellowship Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":2.715,"churchPhone":"(770) 414-5852","lastSoldTime":"1999-06-28","soldPrice":300000.0,"id":10244,"category":"spanish"},{"name":"Amazing Grace Baptist Church","website":"https://agbcatlanta.org/","address":"6282 Lawrenceville Highway","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":1.31,"spaceSize":3669.0,"churchContact":"Dr. Robert Yaw Owusu","churchPhone":"(404) 455-6802","lastSoldTime":"2013-08-28","soldPrice":300000.0,"id":10245,"category":"english"},{"name":"Church of Jesus Christ of Latter-day Saints","website":"http://lds.org/","address":"4823 North Royal Atlanta Drive","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":5.0,"spaceSize":41715.0,"churchPhone":"(770) 493-7200","id":10246,"category":"english"},{"name":"Iglesia Pentecostés Manantial De Vida","address":"2265 Fellowship Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"L","id":10247,"category":"spanish"},{"name":"Iglesia Del Nuevo Pacto","address":"4387 Hugh Howell Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"L","churchPhone":"(404) 671-7473","id":10248,"category":"spanish"},{"name":"Cathedral of Praise","address":"1565 Cooledge Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":2.785,"spaceSize":3246.0,"churchPhone":"(770) 939-9530","id":10249,"category":"english"},{"name":"Little Miller Grove Baptist Church","website":"https://www.bigmillergrove.org/?fbclid=IwY2xjawObLyZleHRuA2FlbQIxMABicmlkETFIZVBwZ2t4dFB4VW8xdHFGc3J0YwZhcHBfaWQQMjIyMDM5MTc4ODIwMDg5MgABHjTplG3FYIJgUUkNG3_6vEt6Akl5oqgNM1czla-CXbeYAD8wGVtWAtBaPD34_aem_-WYkLKuxDuD5Mj95tvYHdg&brid=GnKfO45wsGaa51ZXjgSVSg","address":"1970 Peters Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":1.4,"churchContact":"Miles E. Fowler","churchPhone":"(678) 933-4479","churchEmail":"contactus@bigmillergrove.org","id":10250,"category":"english"},{"name":"Royalhouse Chapel International ATL","website":"http://www.royalhouseatl.org/","address":"6330 Lawrenceville Highway","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"L","churchPhone":"(470) 255-2655","id":10251,"category":"english"},{"name":"International Church, Inc","website":"http://internationalchurch.cc/","address":"1751 Montreal Circle","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"L","churchPhone":"(404) 321-3392","id":10252,"category":"english"},{"name":"Emmanuel International Church","address":"2090 Tucker Industrial Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"L","churchPhone":"(404) 452-8595","id":10253,"category":"english"},{"name":"Church Worship Center","address":"4178 1st Avenue","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"L","churchPhone":"(770) 696-9369","id":10254,"category":"english"},{"name":"Church-The Living God Full","website":"https://www.facebook.com/clgatlanta/","address":"1660 Cooledge Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"O","landAreaAc":1.91,"churchPhone":"(770) 270-4125","churchEmail":"clgatlantabranch@gmail.com","notes":"This might be an opportunity","id":10255,"category":"english"},{"name":"Oromo evangelical Church,Atlanta","address":"1812 Cooledge Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"L","id":10256,"category":"english"},{"name":"Hand Maidens Ministries Inc","address":"3983 Lavista Road","city":"Tucker","county":"DeKalb","zip":"30084","ownLease":"L","churchPhone":"(770) 493-9600","id":10257,"category":"english"},{"name":"Crossway Baptist Church","website":"https://www.crosswaybaptistga.com/","address":"3250 Peachtree Corners Cir Suite G","city":"Norcross","county":"Gwinnett","zip":"30092","id":10258,"category":"english"},{"name":"World Changers Ministries","address":"6920 Jimmy Carter Blvd #200","city":"Norcross","county":"Gwinnett","zip":"30071","id":10259,"category":"english"},{"name":"Discipleship International","address":"6015 Atlantic Blvd G","city":"Norcross","county":"Gwinnett","zip":"30071","id":10260,"category":"english"},{"name":"Redline Athletics Peachtree Corners","address":"4975 Avalon Ridge Rkwy","city":"Peachtree Corners","county":"Gwinnett","ownLease":"L","notes":"Owner is Brian Weis, 678-661-6428 / 678-489-1358. bweis@redlineathletics.com/   he is leasing the space for 5 years the 14K sf. He is doing indoor volleyball training for kids. biz doing good. He may need more space later on","id":10261,"category":"english"},{"name":"Connex Industrial Corp","address":"4975 Avalon Ridge Pkwy, Suite 200","city":"Norcross","county":"Gwinnett","zip":"30071","ownLease":"O","notes":"Joy Wu, joy.wu@go-connex.com / 770-248-9588. the office manager meet us. They are the owner of the property. Current leasing suite 300 but I can't find it anywhere online. The owner is Roger Y. Zhao 770-248-9588.","id":10262,"category":"english"},{"id":20001,"category":"english","name":"Lawrenceville First Baptist Church","address":"165 S Clayton St","city":"Lawrenceville","county":"Gwinnett","zip":"30046","churchPhone":"(770) 995-7125","churchContact":"Brian Fillingim (Senior Pastor)","website":"https://lawrencevillefirst.org","notes":"Baptist (SBC). Hosts Primera Iglesia Bautista Hispana on same campus. Large historic congregation in downtown Lawrenceville."},{"id":20002,"category":"english","name":"Lawrenceville First United Methodist Church","address":"395 W Crogan St","city":"Lawrenceville","county":"Gwinnett","zip":"30046","churchPhone":"(770) 963-0386","churchContact":"Adam Hilderbrandt (Pastor-in-Charge); Deanne Lynch (Asst.)","website":"https://www.lvfirst.org","notes":"United Methodist. Downtown Lawrenceville, established congregation."},{"id":20003,"category":"english","name":"St. Lawrence Catholic Church","address":"319 Grayson Hwy","city":"Lawrenceville","county":"Gwinnett","zip":"30045","churchPhone":"(770) 963-8992","website":"https://www.saintlaw.org","notes":"Roman Catholic. Largest Catholic parish in Lawrenceville. Multilingual community (English/Spanish)."},{"id":20004,"category":"english","name":"12Stone Church (Lawrenceville Campus)","address":"1322 Buford Dr","city":"Lawrenceville","county":"Gwinnett","zip":"30043","churchPhone":"678-990-8100","churchContact":"Paul Nieman (Campus Pastor); Jason Berry (Senior)","website":"https://12stone.com","notes":"Non-denominational megachurch HQ. Multi-site (~9 campuses)."},{"id":20005,"category":"english","name":"Lawrenceville Presbyterian Church","address":"800 Lawrenceville Hwy S","city":"Lawrenceville","county":"Gwinnett","zip":"30046","churchPhone":"(770) 963-9498","website":"https://lawrencevillepresbyterian.org","notes":"Presbyterian (PCUSA)."},{"id":20006,"category":"english","name":"Hebron Baptist Church","address":"202 Hebron Church Rd","city":"Dacula","county":"Gwinnett","zip":"30019","churchPhone":"(770) 962-3671","churchContact":"Dr. Landon Dowden (Senior Pastor)","website":"https://hebronchurch.org","notes":"Historic large Baptist church just east of Lawrenceville."},{"id":20007,"category":"english","name":"Mercy's Point Church","address":"1685 Old Norcross Rd","city":"Lawrenceville","county":"Gwinnett","zip":"30046","website":"https://mercypoint.church","notes":"Non-denominational."},{"id":20008,"category":"english","name":"Dominion City Church","address":"564 W Crogan St","city":"Lawrenceville","county":"Gwinnett","zip":"30046","churchPhone":"(470) 785-9262","churchContact":"Pastor Kay (Resident)","website":"https://dclawrenceville.org","serviceTime":"Sundays 10am","notes":"Non-denom multicultural."},{"id":20009,"category":"english","name":"World Outreach Church For All Nations","address":"1294 Braselton Hwy","city":"Lawrenceville","county":"Gwinnett","zip":"30043","notes":"Non-denominational. Multinational congregation."},{"id":20010,"category":"english","name":"The Bridge Church","address":"2105 Newpointe Pl, Suite 100","city":"Lawrenceville","county":"Gwinnett","zip":"30043","notes":"Non-denominational."},{"id":20011,"category":"english","name":"North River Church","address":"1725 Spectrum Dr, Suite B","city":"Lawrenceville","county":"Gwinnett","zip":"30043","notes":"Non-denominational."},{"id":20012,"category":"english","name":"Lawrenceville Church of God","address":"329 Grayson Hwy","city":"Lawrenceville","county":"Gwinnett","zip":"30046","churchPhone":"(770) 963-4858","website":"https://www.thelcog.com","notes":"Church of God."},{"id":20013,"category":"english","name":"One Church of God","address":"421 W Pike St","city":"Lawrenceville","county":"Gwinnett","zip":"30045","churchPhone":"678-377-7929","notes":"Church of God."},{"id":20014,"category":"english","name":"Pentecostals of Lawrenceville","address":"900 Cripple Creek Dr","city":"Lawrenceville","county":"Gwinnett","notes":"UPCI Pentecostal."},{"id":20015,"category":"english","name":"Lawrenceville Church of Christ","city":"Lawrenceville","county":"Gwinnett","website":"https://www.lawrencevillechurch.org","notes":"Church of Christ. Verify exact address before visit."},{"id":20016,"category":"english","name":"Galilean Baptist Church","address":"1390 Monfort Rd","city":"Lawrenceville","county":"Gwinnett","zip":"30046","website":"https://www.gbcgwinnett.com","notes":"Baptist."},{"id":20017,"category":"english","name":"Meadowbrook Baptist Church","city":"Lawrenceville","county":"Gwinnett","churchPhone":"(770) 682-1103","notes":"Baptist. Verify exact address before visit."},{"id":20018,"category":"english","name":"New Hope Baptist Church","city":"Lawrenceville","county":"Gwinnett","churchPhone":"(770) 995-0784","notes":"Baptist. Verify exact address before visit."},{"id":20019,"category":"english","name":"New Jerusalem Baptist Church","city":"Lawrenceville","county":"Gwinnett","churchPhone":"(770) 978-9209","notes":"Baptist. Verify exact address before visit."},{"id":20020,"category":"english","name":"Mount Calvary Methodist Church","city":"Lawrenceville","county":"Gwinnett","churchPhone":"(770) 822-4672","notes":"Methodist. Verify exact address before visit."},{"id":20021,"category":"english","name":"New Hope United Methodist Church","city":"Lawrenceville","county":"Gwinnett","churchPhone":"(770) 962-0605","notes":"United Methodist. Verify exact address before visit."},{"id":20022,"category":"english","name":"Atlanta Church of God","city":"Lawrenceville","county":"Gwinnett","website":"https://www.atlantachurchofgod.org","notes":"South Asian/Indian Pentecostal. Verify address."},{"id":20023,"category":"english","name":"Impact Church Georgia","city":"Lawrenceville","county":"Gwinnett","website":"https://www.impactchurchgeorgia.com","notes":"Non-denominational. Verify exact address."},{"id":20030,"category":"spanish","name":"Primera Iglesia Bautista Hispana de Lawrenceville","address":"165 S Clayton St","city":"Lawrenceville","county":"Gwinnett","zip":"30046","churchPhone":"(770) 410-8419","churchContact":"Pr. Ventura Ruiz Jr.","website":"https://www.lawrencevilleprimera.org","serviceTime":"Domingos 12:30pm","notes":"Bautista (SBC). Comparte campus con Lawrenceville First Baptist."},{"id":20031,"category":"spanish","name":"Iglesia Pentecostal Bethel de Lawrenceville","address":"1305 Lakes Pkwy, Suite 120","city":"Lawrenceville","county":"Gwinnett","zip":"30043","churchPhone":"(678) 294-7873","churchContact":"Pr. Cesar DelCid & Pra. Xiomara DelCid","churchEmail":"ipbdlawrencevillega@gmail.com","website":"https://www.iglesiapentecostalbetheldelawrencevillega.com","notes":"Pentecostal."},{"id":20032,"category":"spanish","name":"Iglesia Pentecostes de Dios es el Poder","address":"199 E Crogan St","city":"Lawrenceville","county":"Gwinnett","zip":"30046","notes":"Pentecostal."},{"id":20033,"category":"spanish","name":"Iglesia Asambleas de Dios - Roca de Salvacion","address":"2449 Lawrenceville Hwy","city":"Decatur","county":"DeKalb","zip":"30033","churchContact":"Pr. Paulino Santana","notes":"Asambleas de Dios. Servicios miercoles/viernes 7:30pm y domingos. ~25min south of Lawrenceville."},{"id":20034,"category":"spanish","name":"Iglesia Adventista del Septimo Dia Lawrenceville Hispana","city":"Lawrenceville","county":"Gwinnett","website":"https://lawrencevillehispanicga.adventistchurch.org","notes":"Adventista. Verify exact address."},{"id":20035,"category":"spanish","name":"Iglesia Dios Catedral de Fe","address":"329 Grayson Hwy","city":"Lawrenceville","county":"Gwinnett","zip":"30046","notes":"Pentecostal. Shares address w/ Lawrenceville Church of God; verify suite."},{"id":20036,"category":"spanish","name":"Iglesia Bautista Resurreccion","address":"1150 Rock Springs Rd","city":"Lawrenceville","county":"Gwinnett","notes":"Bautista."},{"id":20037,"category":"spanish","name":"Iglesia Bautista Vida Nueva","address":"1648 Lawrenceville Hwy","city":"Lawrenceville","county":"Gwinnett","notes":"Bautista."},{"id":20038,"category":"spanish","name":"Iglesia Pentecostal Tabernaculo de la Fe","city":"Lawrenceville","county":"Gwinnett","notes":"Pentecostal. Verify exact address."},{"id":20039,"category":"spanish","name":"Mision Catolica Nuestra Senora de las Americas","address":"4603 Lawrenceville Hwy","city":"Lilburn","county":"Gwinnett","zip":"30047","website":"https://www.oloacm.org","notes":"Catolica (misa en espanol). Largest Hispanic Catholic mission serving the area."},{"id":20050,"category":"korean","name":"Atlanta Korean Baptist Church","address":"922 Hi Hope Rd","city":"Lawrenceville","county":"Gwinnett","zip":"30043","churchPhone":"(470) 281-1708","churchEmail":"atlanta.kbc.office@gmail.com","website":"https://www.facebook.com/akbc.net/","notes":"Baptist (SBC, Korean). 애틀란타 한인침례교회"},{"id":20051,"category":"korean","name":"The Servant Korean Evangelical Church of Atlanta","address":"1724 Atkinson Rd NW","city":"Lawrenceville","county":"Gwinnett","zip":"30043","churchPhone":"(770) 545-8777","churchContact":"Senior Pastor Ahn Sun Hong","website":"https://www.servantem.com","notes":"Evangelical (Korean). Has English Ministry (Servant EM) for 2nd-gen."},{"id":20052,"category":"korean","name":"Korean Presbyterian Church of Lawrenceville","address":"1190 Laurelwood Ln","city":"Lawrenceville","county":"Gwinnett","notes":"Presbyterian (PCA-Korean)."},{"id":20053,"category":"korean","name":"Han Vision EM (Korean American Church)","city":"Suwanee","county":"Gwinnett","website":"https://www.hanvisionem.com","notes":"Korean American (English Ministry). Verify exact address."},{"id":20054,"category":"korean","name":"Sugarloaf Korean Baptist Church","address":"1664 Old Peachtree Rd NW","city":"Suwanee","county":"Gwinnett","zip":"30024","churchPhone":"(770) 934-9397","churchContact":"Pastor Che","churchEmail":"support@skbc.us","website":"https://skbc.churchcenter.com","notes":"Baptist (SBC, Korean). ~700-member congregation. Just north of Lawrenceville."}]</script>
+<script>
+const CHURCHES = JSON.parse(document.getElementById('seed-data').textContent);
+const CATEGORY_META = {
+  english:{label:'English',color:'var(--english)',emoji:'🇺🇸'},
+  spanish:{label:'Iglesia (ES)',color:'var(--spanish)',emoji:'🇪🇸'},
+  korean: {label:'Korean',color:'var(--korean)',emoji:'🇰🇷'}
+};
+const STATUS_LABELS = {pending:'Not contacted',visited:'Visited',followup:'Follow-up','not-interested':'Not interested',converted:'Converted'};
+const STORAGE_TRACK='churchDB_tracking_v2', STORAGE_USER='churchDB_userChurches_v2';
+let tracking={}, userChurches=[];
+try{tracking=JSON.parse(localStorage.getItem(STORAGE_TRACK)||'{}');}catch(e){}
+try{userChurches=JSON.parse(localStorage.getItem(STORAGE_USER)||'[]');}catch(e){}
+function persistTracking(){localStorage.setItem(STORAGE_TRACK,JSON.stringify(tracking));}
+function persistUserChurches(){localStorage.setItem(STORAGE_USER,JSON.stringify(userChurches));}
+function getAllChurches(){const ids=new Set(userChurches.map(c=>c.id));return CHURCHES.filter(c=>!ids.has(c.id)).concat(userChurches);}
+function nextChurchId(){const m=getAllChurches().reduce((a,c)=>Math.max(a,Number(c.id)||0),0);return Math.max(m,90000)+1;}
+function isUserChurch(id){return userChurches.some(c=>c.id===id);}
+
+const ALL_CITIES = Array.from(new Set(getAllChurches().map(c=>c.city).filter(Boolean))).sort();
+let activeCities=new Set(ALL_CITIES), activeLangs=new Set(['english','spanish','korean']), activeTenure='all';
+let searchTerm='', sortKey='name', sortDir=1, currentChurch=null;
+
+// ---------- Google Maps embed driver ----------
+// Build a Google Maps query string for a church (or for an "overview" of a city/area).
+function gmapQuery(c){
+  if(!c) return 'Gwinnett County GA';
+  return [c.name, c.address, c.city, 'GA', c.zip].filter(Boolean).join(' ');
+}
+function setMapToChurch(c){
+  const q = encodeURIComponent(gmapQuery(c));
+  document.getElementById('gmap').src = 'https://www.google.com/maps?q='+q+'&output=embed';
+  document.getElementById('mapHeaderName').textContent = c ? '· ' + c.name : '';
+  // Wire the toolbar buttons to this church
+  const openBtn = document.getElementById('openFullMapBtn');
+  const dirBtn  = document.getElementById('directionsBtn');
+  openBtn.onclick = () => window.open('https://www.google.com/maps/search/?api=1&query='+q, '_blank');
+  dirBtn.onclick  = () => window.open('https://www.google.com/maps/dir/?api=1&destination='+q, '_blank');
+  // On phones, scroll the map into view when a row is tapped
+  if (window.matchMedia('(max-width: 1100px)').matches) {
+    document.getElementById('gmap').scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+}
+function setMapToArea(label){
+  const q = encodeURIComponent(label || 'Gwinnett County GA');
+  document.getElementById('gmap').src = 'https://www.google.com/maps?q='+q+'&output=embed';
+  document.getElementById('mapHeaderName').textContent = label ? '· ' + label : '';
+  document.getElementById('openFullMapBtn').onclick = () => window.open('https://www.google.com/maps/search/?api=1&query='+q, '_blank');
+  document.getElementById('directionsBtn').onclick  = () => window.open('https://www.google.com/maps/dir/?api=1&destination='+q, '_blank');
+}
+// Auto-focus the embed on the active filter region.
+function syncMapToFilter(){
+  if (currentChurch) return; // user has a church selected; don't overwrite
+  const cities = Array.from(activeCities);
+  if (cities.length === 1) setMapToArea(cities[0] + ', GA');
+  else if (cities.length > 1 && cities.length < ALL_CITIES.length) setMapToArea(cities[0] + ', GA');
+  else setMapToArea('Gwinnett County GA');
+}
+function refreshMarkers(){
+  // No-op equivalent in the iframe world — keep the function so other code that
+  // calls refreshMarkers() still works. Update the visible-count indicator instead.
+  let visible=0;
+  for(const c of getAllChurches()){
+    if(!matchesAllFilters(c)) continue;
+    visible++;
+  }
+  syncMapToFilter();
+}
+function matchesAllFilters(c){
+  if(!activeLangs.has(c.category)) return false;
+  if(activeCities.size>0 && !activeCities.has(c.city)) return false;
+  if(activeTenure!=='all' && c.ownLease!==activeTenure) return false;
+  return matchesSearch(c);
+}
+function matchesSearch(c){
+  if(!searchTerm) return true;
+  const hay=[c.name,c.address,c.city,c.county,c.zip,c.churchContact,c.churchPhone,c.churchEmail,c.propertyContact,c.propertyPhone,c.propertyEmail,c.notes,c.website,c.serviceTime].filter(Boolean).join(' ').toLowerCase();
+  return hay.includes(searchTerm.toLowerCase());
+}
+
+function renderCityFilters(){
+  const wrap=document.getElementById('cityFilters'); wrap.innerHTML='';
+  const allBtn=document.createElement('button');
+  allBtn.className='filter-btn'+(activeCities.size===ALL_CITIES.length?' active':'');
+  allBtn.textContent='All ('+ALL_CITIES.length+')';
+  allBtn.onclick=()=>{activeCities = activeCities.size===ALL_CITIES.length ? new Set() : new Set(ALL_CITIES); renderAll();};
+  wrap.appendChild(allBtn);
+  for(const city of ALL_CITIES){
+    const count=getAllChurches().filter(c=>c.city===city).length;
+    const btn=document.createElement('button');
+    btn.className='filter-btn'+(activeCities.has(city)?' active':'');
+    btn.textContent=city+' ('+count+')';
+    btn.onclick=()=>{ if(activeCities.has(city)) activeCities.delete(city); else activeCities.add(city); renderAll(); };
+    wrap.appendChild(btn);
+  }
+}
+function renderLangFilters(){
+  const wrap=document.getElementById('langFilters'); wrap.innerHTML='';
+  for(const k of ['english','spanish','korean']){
+    const meta=CATEGORY_META[k];
+    const count=getAllChurches().filter(c=>c.category===k).length;
+    const btn=document.createElement('button');
+    btn.className='filter-btn'+(activeLangs.has(k)?' active':'');
+    btn.innerHTML='<span class="dot" style="background:'+meta.color+'"></span>'+meta.label+' ('+count+')';
+    btn.onclick=()=>{ if(activeLangs.has(k)) activeLangs.delete(k); else activeLangs.add(k); if(activeLangs.size===0) activeLangs=new Set([k]); renderAll(); };
+    wrap.appendChild(btn);
+  }
+}
+document.querySelectorAll('[data-tenure]').forEach(b=>{
+  b.onclick=()=>{ document.querySelectorAll('[data-tenure]').forEach(x=>x.classList.remove('active')); b.classList.add('active'); activeTenure=b.dataset.tenure; renderAll(); };
+});
+
+function renderTable(){
+  const tbody=document.getElementById('churchTbody'); tbody.innerHTML='';
+  let rows=getAllChurches().filter(matchesAllFilters).map(c=>({...c,status:(tracking[c.id]?.status)||'pending'}));
+  rows.sort((a,b)=>cmp(a,b,sortKey,sortDir));
+  if(rows.length===0){document.getElementById('emptyState').style.display='block';return;}
+  document.getElementById('emptyState').style.display='none';
+  for(const r of rows){
+    const meta=CATEGORY_META[r.category]||CATEGORY_META.english;
+    const tenurePill=r.ownLease==='O'?'<span class="pill owned">Owned</span>':r.ownLease==='L'?'<span class="pill leased">Leased</span>':'—';
+    const tr=document.createElement('tr'); tr.dataset.id=r.id;
+    tr.onclick=()=>{
+      const ch = getAllChurches().find(c=>c.id===r.id);
+      setMapToChurch(ch);
+      openModal(ch);
+    };
+    tr.innerHTML='<td><span class="pill status-'+r.status+'">'+STATUS_LABELS[r.status]+'</span></td>'
+      +'<td>'+escapeHtml(r.city||'—')+'</td>'
+      +'<td><button class="icon-btn" title="Show on map" data-pin="'+r.id+'">📍</button> <strong>'+escapeHtml(r.name)+'</strong> <span class="pill '+r.category+'" title="'+meta.label+'">'+meta.emoji+'</span></td>'
+      +'<td>'+escapeHtml(r.address||'—')+'</td>'
+      +'<td class="num">'+fmtNum(r.spaceSize)+'</td>'
+      +'<td class="num">'+fmtNum(r.landAreaAc)+'</td>'
+      +'<td>'+tenurePill+'</td>'
+      +'<td>'+(r.churchPhone?'<a href="tel:'+onlyDigits(r.churchPhone)+'" style="color:#93c5fd;" onclick="event.stopPropagation();">'+escapeHtml(r.churchPhone)+'</a>':'—')+'</td>';
+    // Pin button focuses the map only (does NOT open the modal)
+    tr.querySelector('[data-pin]').onclick = (ev) => {
+      ev.stopPropagation();
+      const ch = getAllChurches().find(c=>c.id===r.id);
+      setMapToChurch(ch);
+    };
+    tbody.appendChild(tr);
+  }
+}
+function cmp(a,b,key,dir){
+  let va=a[key],vb=b[key];
+  if(typeof va==='number'||typeof vb==='number'){va=Number(va)||-Infinity;vb=Number(vb)||-Infinity;}
+  else{va=(va||'').toString().toLowerCase();vb=(vb||'').toString().toLowerCase();}
+  if(va<vb) return -dir; if(va>vb) return dir; return 0;
+}
+function renderStats(){
+  const all=getAllChurches();
+  const total=all.length;
+  const visited=all.filter(c=>['visited','converted'].includes(tracking[c.id]?.status)).length;
+  const followup=all.filter(c=>tracking[c.id]?.status==='followup').length;
+  const converted=all.filter(c=>tracking[c.id]?.status==='converted').length;
+  const owned=all.filter(c=>c.ownLease==='O').length;
+  document.getElementById('stats').innerHTML =
+    '<div class="stat"><div class="num">'+total+'</div><div class="lbl">Churches</div></div>'+
+    '<div class="stat"><div class="num" style="color:#6ee7b7;">'+owned+'</div><div class="lbl">Owned</div></div>'+
+    '<div class="stat"><div class="num" style="color:#86efac;">'+visited+'</div><div class="lbl">Visited</div></div>'+
+    '<div class="stat"><div class="num" style="color:#fde047;">'+followup+'</div><div class="lbl">Follow-ups</div></div>'+
+    '<div class="stat"><div class="num" style="color:#d8b4fe;">'+converted+'</div><div class="lbl">Converted</div></div>';
+}
+function renderAll(){renderCityFilters();renderLangFilters();refreshMarkers();renderTable();renderStats();}
+
+function openModal(c){
+  if(!c) return;
+  currentChurch=c;
+  setMapToChurch(c);
+  const meta=CATEGORY_META[c.category]||CATEGORY_META.english;
+  document.getElementById('modalTitle').textContent=c.name;
+  document.getElementById('modalCategory').innerHTML='<span class="pill '+c.category+'">'+meta.emoji+' '+meta.label+'</span>'
+    +(c.ownLease==='O'?' <span class="pill owned">Owned</span>':c.ownLease==='L'?' <span class="pill leased">Leased</span>':'');
+  document.getElementById('dAddress').textContent=c.address||'—';
+  document.getElementById('dCity').textContent=[c.city,c.zip].filter(Boolean).join(' ')||'—';
+  document.getElementById('dCounty').textContent=c.county||'—';
+  document.getElementById('dOwnLease').textContent=c.ownLease==='O'?'Owned':c.ownLease==='L'?'Leased':'—';
+  document.getElementById('dLand').textContent=c.landAreaAc!=null?(c.landAreaAc+' ac'):'—';
+  document.getElementById('dSqft').textContent=c.spaceSize!=null?(fmtNum(c.spaceSize)+' sqft'):'—';
+  document.getElementById('dLastSold').textContent=c.lastSoldTime||'—';
+  document.getElementById('dSoldPrice').textContent=c.soldPrice!=null?fmtCurrency(c.soldPrice):'—';
+  document.getElementById('dService').textContent=c.serviceTime||'—';
+  document.getElementById('dChurchContact').textContent=c.churchContact||'—';
+  document.getElementById('dPropContact').textContent=c.propertyContact||'—';
+  document.getElementById('dChurchPhone').innerHTML=c.churchPhone?'<a href="tel:'+onlyDigits(c.churchPhone)+'">'+escapeHtml(c.churchPhone)+'</a>':'—';
+  document.getElementById('dPropPhone').innerHTML=c.propertyPhone?'<a href="tel:'+onlyDigits(c.propertyPhone)+'">'+escapeHtml(c.propertyPhone)+'</a>':'—';
+  document.getElementById('dChurchEmail').innerHTML=c.churchEmail?'<a href="mailto:'+escapeHtml(c.churchEmail)+'">'+escapeHtml(c.churchEmail)+'</a>':'—';
+  document.getElementById('dPropEmail').innerHTML=c.propertyEmail?'<a href="mailto:'+escapeHtml(c.propertyEmail)+'">'+escapeHtml(c.propertyEmail)+'</a>':'—';
+  document.getElementById('dWebsite').innerHTML=c.website?'<a href="'+escapeHtml(c.website)+'" target="_blank" rel="noopener">'+escapeHtml(c.website)+'</a>':'—';
+  document.getElementById('dResearchNotes').textContent=c.notes||'—';
+
+  const t=tracking[c.id]||{};
+  document.getElementById('fStatus').value=t.status||'pending';
+  document.getElementById('fVisitDate').value=t.visitDate||'';
+  document.getElementById('fFollowupDate').value=t.followupDate||'';
+  document.getElementById('fContactName').value=t.contactName||'';
+  document.getElementById('fBestTime').value=t.bestTime||'';
+  document.getElementById('fNotes').value=t.notes||'';
+
+  document.getElementById('openMapsBtn').onclick=()=>{
+    const q=encodeURIComponent([c.name,c.address,c.city,'GA',c.zip].filter(Boolean).join(' '));
+    window.open('https://www.google.com/maps/search/?api=1&query='+q,'_blank');
+  };
+  const phone=c.churchPhone||c.propertyPhone;
+  const callBtn=document.getElementById('callBtn');
+  if(phone){callBtn.style.display='';callBtn.onclick=()=>location.href='tel:'+onlyDigits(phone);} else callBtn.style.display='none';
+  const email=c.churchEmail||c.propertyEmail;
+  const emailBtn=document.getElementById('emailBtn');
+  if(email){emailBtn.style.display='';emailBtn.onclick=()=>location.href='mailto:'+email;} else emailBtn.style.display='none';
+  document.getElementById('editBtn').onclick=()=>{closeModal();openAddModal(c);};
+  const deleteBtn=document.getElementById('deleteBtn');
+  if(isUserChurch(c.id)){
+    deleteBtn.style.display='';
+    deleteBtn.onclick=()=>{
+      if(confirm('Remove "'+c.name+'" from your database?')){
+        userChurches=userChurches.filter(x=>x.id!==c.id);
+        persistUserChurches();
+        delete tracking[c.id]; persistTracking();
+        closeModal(); renderAll();
+      }
+    };
+  } else deleteBtn.style.display='none';
+  document.getElementById('modalBackdrop').classList.add('show');
+}
+function closeModal(){document.getElementById('modalBackdrop').classList.remove('show');currentChurch=null;}
+document.getElementById('modalBackdrop').addEventListener('click',e=>{if(e.target.id==='modalBackdrop') closeModal();});
+function saveTracking(){
+  if(!currentChurch) return;
+  tracking[currentChurch.id]={
+    status:document.getElementById('fStatus').value,
+    visitDate:document.getElementById('fVisitDate').value,
+    followupDate:document.getElementById('fFollowupDate').value,
+    contactName:document.getElementById('fContactName').value,
+    bestTime:document.getElementById('fBestTime').value,
+    notes:document.getElementById('fNotes').value,
+    updatedAt:new Date().toISOString()
+  };
+  persistTracking(); closeModal(); renderAll();
+}
+
+document.querySelectorAll('th[data-sort]').forEach(th=>{
+  th.onclick=()=>{
+    const k=th.dataset.sort;
+    if(sortKey===k) sortDir*=-1; else { sortKey=k; sortDir=1; }
+    document.querySelectorAll('th').forEach(t=>t.classList.remove('sorted'));
+    th.classList.add('sorted');
+    renderTable();
+  };
+});
+document.getElementById('searchInput').addEventListener('input',e=>{searchTerm=e.target.value; renderAll();});
+
+document.getElementById('exportBtn').onclick=()=>{
+  const headers=['Name','Category','Address','City','County','Zip','Own/Lease','Land Area (AC)','Space Size','Service Time','Church Contact','Church Phone','Church Email','Property Contact','Property Phone','Property Email','Last Sold Time','Sold Price','Website','Notes (research)','Status','Visit Date','Follow-up Date','Contact Name','Best Time','Notes (visit)'];
+  const rows=[headers];
+  for(const c of getAllChurches()){
+    const t=tracking[c.id]||{};
+    rows.push([c.name, CATEGORY_META[c.category]?.label||'', c.address, c.city, c.county, c.zip,
+      c.ownLease==='O'?'Owned':c.ownLease==='L'?'Leased':'',
+      c.landAreaAc, c.spaceSize, c.serviceTime,
+      c.churchContact, c.churchPhone, c.churchEmail,
+      c.propertyContact, c.propertyPhone, c.propertyEmail,
+      c.lastSoldTime, c.soldPrice, c.website, c.notes,
+      STATUS_LABELS[t.status||'pending'], t.visitDate||'', t.followupDate||'', t.contactName||'', t.bestTime||'', t.notes||'']);
+  }
+  const csv=rows.map(r=>r.map(v=>'"'+(v==null?'':v).toString().replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download='church_db_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+};
+
+let editingId=null;
+function openAddModal(existing){
+  editingId=existing?existing.id:null;
+  document.getElementById('addModalTitle').textContent=existing?('Edit: '+existing.name):'Add a church';
+  const fill=(id,v)=>document.getElementById(id).value=v??'';
+  fill('aName',existing?.name); fill('aCategory',existing?.category||'english'); fill('aOwnLease',existing?.ownLease||'');
+  fill('aService',existing?.serviceTime); fill('aAddress',existing?.address);
+  fill('aCity',existing?.city); fill('aCounty',existing?.county); fill('aZip',existing?.zip);
+  fill('aLand',existing?.landAreaAc); fill('aSqft',existing?.spaceSize); fill('aSoldPrice',existing?.soldPrice);
+  fill('aSoldDate',existing?.lastSoldTime); fill('aLat',existing?.lat); fill('aLng',existing?.lng);
+  fill('aChurchContact',existing?.churchContact); fill('aChurchPhone',existing?.churchPhone); fill('aChurchEmail',existing?.churchEmail);
+  fill('aPropContact',existing?.propertyContact); fill('aPropPhone',existing?.propertyPhone); fill('aPropEmail',existing?.propertyEmail);
+  fill('aWebsite',existing?.website); fill('aNotes',existing?.notes);
+  document.getElementById('geocodeBtnStatus').textContent='';
+  document.getElementById('addModalBackdrop').classList.add('show');
+  setTimeout(()=>document.getElementById('aName').focus(),50);
+}
+function closeAddModal(){document.getElementById('addModalBackdrop').classList.remove('show');editingId=null;}
+document.getElementById('addModalBackdrop').addEventListener('click',e=>{if(e.target.id==='addModalBackdrop') closeAddModal();});
+document.getElementById('addChurchBtn').onclick=()=>openAddModal(null);
+
+document.getElementById('geocodeBtn').onclick=async()=>{
+  const addr=[document.getElementById('aAddress').value,document.getElementById('aCity').value,'GA',document.getElementById('aZip').value].filter(Boolean).join(', ');
+  const status=document.getElementById('geocodeBtnStatus');
+  if(!addr){status.textContent='Enter an address first.';return;}
+  status.textContent='Looking up...';
+  try{
+    const url='https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(addr);
+    const resp=await fetch(url,{headers:{'Accept':'application/json'}});
+    const data=await resp.json();
+    if(data&&data.length){
+      document.getElementById('aLat').value=(+data[0].lat).toFixed(6);
+      document.getElementById('aLng').value=(+data[0].lon).toFixed(6);
+      status.textContent='Found: '+data[0].display_name.slice(0,80);
+      status.style.color='#86efac';
+    } else { status.textContent='No match. Enter coordinates manually.'; status.style.color='#fca5a5'; }
+  } catch(err){ status.textContent='Lookup failed.'; status.style.color='#fca5a5'; }
+};
+
+document.getElementById('saveAddBtn').onclick=()=>{
+  const name=document.getElementById('aName').value.trim();
+  if(!name){alert('Name is required.');return;}
+  const num=id=>{const v=parseFloat(document.getElementById(id).value);return isFinite(v)?v:undefined;};
+  const val=id=>document.getElementById(id).value.trim();
+  const record={
+    id: editingId||nextChurchId(),
+    category: val('aCategory')||'english',
+    name,
+    address: val('aAddress'), city: val('aCity'), county: val('aCounty'), zip: val('aZip'),
+    ownLease: val('aOwnLease'), serviceTime: val('aService'),
+    landAreaAc:num('aLand'), spaceSize:num('aSqft'), soldPrice:num('aSoldPrice'),
+    lastSoldTime: val('aSoldDate'), lat:num('aLat'), lng:num('aLng'),
+    churchContact: val('aChurchContact'), churchPhone: val('aChurchPhone'), churchEmail: val('aChurchEmail'),
+    propertyContact: val('aPropContact'), propertyPhone: val('aPropPhone'), propertyEmail: val('aPropEmail'),
+    website: val('aWebsite'), notes: val('aNotes'),
+    userAdded:true
+  };
+  Object.keys(record).forEach(k=>{if(record[k]===''||record[k]===undefined) delete record[k];});
+  record.id = editingId||record.id; record.name=name; record.category=record.category||'english';
+  const idx=userChurches.findIndex(c=>c.id===record.id);
+  if(idx>=0) userChurches[idx]=record; else userChurches.push(record);
+  if(record.city && !ALL_CITIES.includes(record.city)){ALL_CITIES.push(record.city); ALL_CITIES.sort(); activeCities.add(record.city);}
+  persistUserChurches(); closeAddModal(); renderAll();
+};
+
+document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
+document.getElementById('importFile').onchange=(e)=>{
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const rows=parseCSV(ev.target.result);
+      if(rows.length<2){alert('CSV looks empty.');return;}
+      const headers=rows[0].map(h=>(h||'').toLowerCase().trim());
+      const find=(...names)=>{for(const n of names){const i=headers.findIndex(h=>h===n||h.startsWith(n)); if(i>=0) return i;} return -1;};
+      const cols={
+        name:find('name'), category:find('category','type','language'),
+        address:find('address'), city:find('city'), county:find('county'), zip:find('zip','postal'),
+        ownLease:find('own/lease','tenure','own','ownership'),
+        landAreaAc:find('land area (ac)','land area','acres'),
+        spaceSize:find('space size','sqft','square feet','building size'),
+        serviceTime:find('service time','services'),
+        churchContact:find('church contact','pastor','contact name','contact'),
+        churchPhone:find('church phone','phone'),
+        churchEmail:find('church email','email'),
+        propertyContact:find('property contact','owner','landlord'),
+        propertyPhone:find('property phone'),
+        propertyEmail:find('property email'),
+        lastSoldTime:find('last sold time','last sold','sold date','sold time'),
+        soldPrice:find('sold price','price'),
+        website:find('website','url'),
+        notes:find('notes (research)','notes','note','on-site note')
+      };
+      if(cols.name<0){alert('CSV must have at least a Name column.');return;}
+      const catMap={'english':'english','iglesia (es)':'spanish','iglesia':'spanish','spanish':'spanish','korean':'korean'};
+      let added=0;
+      for(let r=1;r<rows.length;r++){
+        const row=rows[r]; if(!row[cols.name]) continue;
+        const get=k=>cols[k]>=0?(row[cols[k]]||'').trim():'';
+        const num=k=>{const v=parseFloat(get(k));return isFinite(v)?v:undefined;};
+        let cat=catMap[get('category').toLowerCase()]||detectLang(get('name'));
+        const olr=get('ownLease').toLowerCase();
+        const ownLease=olr==='o'||olr.startsWith('own')?'O':olr==='l'||olr.startsWith('leas')?'L':'';
+        userChurches.push({
+          id: nextChurchId()+r, category:cat,
+          name:get('name'), address:get('address'),
+          city:get('city'), county:get('county'), zip:get('zip'),
+          ownLease, landAreaAc:num('landAreaAc'), spaceSize:num('spaceSize'),
+          serviceTime:get('serviceTime'),
+          churchContact:get('churchContact'), churchPhone:get('churchPhone'), churchEmail:get('churchEmail'),
+          propertyContact:get('propertyContact'), propertyPhone:get('propertyPhone'), propertyEmail:get('propertyEmail'),
+          lastSoldTime:get('lastSoldTime'), soldPrice:num('soldPrice'),
+          website:get('website'), notes:get('notes'),
+          userAdded:true
+        });
+        added++;
+      }
+      userChurches.forEach(r=>Object.keys(r).forEach(k=>{if(r[k]===''||r[k]===undefined) delete r[k];}));
+      persistUserChurches();
+      const newCities=Array.from(new Set(userChurches.map(c=>c.city).filter(Boolean)));
+      newCities.forEach(c=>{if(!ALL_CITIES.includes(c)){ALL_CITIES.push(c);activeCities.add(c);}});
+      ALL_CITIES.sort(); renderAll(); runGeocoder();
+      alert('Imported '+added+' church'+(added===1?'':'es')+'. The geocoder is running in the background to plot them.');
+    } catch(err){console.error(err); alert('Could not parse that CSV.');}
+    finally{document.getElementById('importFile').value='';}
+  };
+  reader.readAsText(file);
+};
+function parseCSV(text){
+  const rows=[]; let cur=[],val='',inQ=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(inQ){
+      if(ch==='"'&&text[i+1]==='"'){val+='"';i++;}
+      else if(ch==='"') inQ=false;
+      else val+=ch;
+    } else {
+      if(ch==='"') inQ=true;
+      else if(ch===',') { cur.push(val); val=''; }
+      else if(ch==='\n') { cur.push(val); rows.push(cur); cur=[]; val=''; }
+      else if(ch!=='\r') val+=ch;
+    }
+  }
+  if(val!==''||cur.length){cur.push(val); rows.push(cur);}
+  return rows;
+}
+function detectLang(name){
+  if(/\b(iglesia|hispana?|hispanic|spanish|cristiana|adventista|primera|asambleas|ministerio)\b/i.test(name)) return 'spanish';
+  if(/(korean|한인|한국|장로교|침례)/i.test(name)) return 'korean';
+  return 'english';
+}
+
+// runGeocoder is a no-op now (Google Maps handles address lookup itself).
+// We keep the function so the importer's call site doesn't break.
+function runGeocoder(){
+  document.getElementById('geocodeStatus').textContent='Click any row in the directory to focus the map on that church.';
+}
+
+function escapeHtml(s){return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function fmtNum(n){if(n==null||!isFinite(n)) return '—'; return Number(n).toLocaleString('en-US',{maximumFractionDigits:2});}
+function fmtCurrency(n){return Number(n).toLocaleString('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0});}
+function onlyDigits(s){return (s||'').toString().replace(/[^0-9+]/g,'');}
+
+renderAll();
+setMapToArea('Gwinnett County GA');
+</script>
+</body>
+</html>
